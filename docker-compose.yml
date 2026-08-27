@@ -9,9 +9,29 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_PASS=${DB_PASSWORD} # fallback
+      - DB_PASS=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
       - TMDB_API_KEY=${TMDB_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
+      - AUTH_SERVICE_URL=http://auth:3000
+    depends_on:
+      - auth
+    restart: always
+
+  auth:
+    build: ./auth-service
+    # Sem porta exposta para fora (internal only)
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PASS=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - SMTP_HOST=${SMTP_HOST:-sandbox.smtp.mailtrap.io}
+      - SMTP_PORT=${SMTP_PORT:-2525}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8218}
     restart: always
 

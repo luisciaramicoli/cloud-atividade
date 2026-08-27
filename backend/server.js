@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const path = require('path');
@@ -29,45 +28,45 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-// Registro de Usuário
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
+
+// Repassa Registro para Auth Service
 app.post('/api/register', async (req, res) => {
-    const { nome, email, password } = req.body;
-    if (!nome || !email || !password) {
-        return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
-    }
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const [result] = await db.execute(
-            'INSERT INTO usuarios (nome, email, senha_hash) VALUES (?, ?, ?)',
-            [nome, email, hashedPassword]
-        );
-        res.status(201).json({ message: 'Usuário registrado com sucesso!', userId: result.insertId });
+        const response = await axios.post(`${AUTH_SERVICE_URL}/register`, req.body);
+        res.status(response.status).json(response.data);
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ error: 'Email já cadastrado' });
-        }
-        res.status(500).json({ error: 'Erro no banco de dados' });
+        res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
     }
 });
 
-// Login de Usuário
+// Repassa Login para Auth Service
 app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email e senha são obrigatórios' });
-    }
     try {
-        const [rows] = await db.execute('SELECT * FROM usuarios WHERE email = ?', [email]);
-        if (rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
-
-        const user = rows[0];
-        const match = await bcrypt.compare(password, user.senha_hash);
-        if (!match) return res.status(401).json({ error: 'Senha incorreta' });
-
-        const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '2h' });
-        res.json({ message: 'Login realizado com sucesso!', token, nome: user.nome });
+        const response = await axios.post(`${AUTH_SERVICE_URL}/login`, req.body);
+        res.status(response.status).json(response.data);
     } catch (error) {
-        res.status(500).json({ error: 'Erro no banco de dados' });
+        res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
+    }
+});
+
+// Repassa Forgot Password
+app.post('/api/forgot-password', async (req, res) => {
+    try {
+        const response = await axios.post(`${AUTH_SERVICE_URL}/forgot-password`, req.body);
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
+    }
+});
+
+// Repassa Reset Password
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const response = await axios.post(`${AUTH_SERVICE_URL}/reset-password`, req.body);
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
     }
 });
 

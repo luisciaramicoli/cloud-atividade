@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { Routes, Route, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import Catalog from './Catalog';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 
-function App() {
+function AuthForm({ setToken }) {
   const [isLogin, setIsLogin] = useState(true);
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const [token, setToken] = useState(localStorage.getItem('token'));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,15 +30,6 @@ function App() {
       setMessage(error.response?.data?.error || 'Ocorreu um erro');
     }
   };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-  };
-
-  if (token) {
-    return <Catalog onLogout={handleLogout} />;
-  }
 
   return (
     <div className="auth-wrapper">
@@ -69,6 +62,13 @@ function App() {
           <button type="submit">{isLogin ? 'Entrar' : 'Cadastrar'}</button>
         </form>
         {message && <p style={{ color: message.includes('Sucesso') ? '#10b981' : '#ef4444', fontSize: '14px', textAlign: 'center', marginTop: '10px' }}>{message}</p>}
+        
+        {isLogin && (
+          <div style={{ textAlign: 'center', marginTop: '10px' }}>
+            <Link to="/forgot-password" style={{ fontSize: '14px', color: '#6b7280', textDecoration: 'none' }}>Esqueci minha senha</Link>
+          </div>
+        )}
+
         <button 
           type="button" 
           className="btn-secondary"
@@ -81,6 +81,25 @@ function App() {
         </button>
       </div>
     </div>
+  );
+}
+
+function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    navigate('/');
+  };
+
+  return (
+    <Routes>
+      <Route path="/" element={token ? <Catalog onLogout={handleLogout} /> : <AuthForm setToken={setToken} />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+    </Routes>
   );
 }
 
