@@ -4,7 +4,7 @@ services:
   app:
     build: .
     ports:
-      - "${PORT:-3000}:3000"
+      - "8218:3000"
     environment:
       - DB_HOST=${DB_HOST}
       - DB_USER=${DB_USER}
@@ -14,3 +14,4 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
     restart: always
+
