@@ -83,11 +83,11 @@ app.get('/api/movies', authenticateToken, async (req, res) => {
                 ]
             });
         }
-        
+
         // 1. Busca person_id
         const searchRes = await axios.get(`https://api.themoviedb.org/3/search/person?query=Tom+Hanks&api_key=${TMDB_API_KEY}`);
         const personId = searchRes.data.results[0]?.id;
-        
+
         if (!personId) return res.status(404).json({ error: 'Ator não encontrado na TMDB' });
 
         // 2. Busca filmes
@@ -158,7 +158,7 @@ app.post('/api/comments', authenticateToken, async (req, res) => {
 
 // Servir frontend compilado
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
-app.get('*', (req, res) => {
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
