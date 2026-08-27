@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import MovieCard from './MovieCard';
+import api from '../services/api';
+import MovieCard from '../components/MovieCard';
 
 export default function Catalog({ onLogout }) {
   const [movies, setMovies] = useState([]);
@@ -18,7 +18,7 @@ export default function Catalog({ onLogout }) {
 
   const fetchMovies = async () => {
     try {
-      const res = await axios.get('/api/movies', getAuthHeaders());
+      const res = await api.get('movies');
       setMovies(res.data.cast || []);
     } catch (err) {
       setError('Erro ao buscar filmes. ' + (err.response?.data?.error || ''));
@@ -27,7 +27,7 @@ export default function Catalog({ onLogout }) {
 
   const fetchFavorites = async () => {
     try {
-      const res = await axios.get('/api/favorites', getAuthHeaders());
+      const res = await api.get('favorites');
       setFavorites(res.data);
     } catch (err) {
       console.error(err);
@@ -38,13 +38,13 @@ export default function Catalog({ onLogout }) {
     const isFav = favorites.find(f => f.tmdb_movie_id === movie.id);
     try {
       if (isFav) {
-        await axios.delete(`/api/favorites/${movie.id}`, getAuthHeaders());
+        await api.delete(`favorites/${movie.id}`);
       } else {
-        await axios.post('/api/favorites', {
+        await api.post('favorites', {
           tmdb_movie_id: movie.id,
           titulo: movie.title,
           poster_path: movie.poster_path
-        }, getAuthHeaders());
+        });
       }
       fetchFavorites(); // Atualiza a lista
     } catch (err) {

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Routes, Route, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
-import Catalog from './Catalog';
-import ForgotPassword from './ForgotPassword';
-import ResetPassword from './ResetPassword';
+import api from './services/api';
+import Catalog from './pages/Catalog';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function AuthForm({ setToken }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,9 +17,9 @@ function AuthForm({ setToken }) {
     setMessage('');
     
     try {
-      const endpoint = isLogin ? '/api/login' : '/api/register';
+      const endpoint = isLogin ? '/login' : '/register';
       const payload = isLogin ? { email, password } : { nome, email, password };
-      const response = await axios.post(endpoint, payload);
+      const response = await api.post(endpoint, payload);
       
       setMessage(response.data.message || 'Sucesso!');
       if (response.data.token) {

@@ -17,5 +17,5 @@ COPY --from=build-backend /app/backend ./backend
 COPY --from=build-frontend /app/frontend/dist ./frontend/dist
 WORKDIR /app/backend
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "src/server.js"]
 

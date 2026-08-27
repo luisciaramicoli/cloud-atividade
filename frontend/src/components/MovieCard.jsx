@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 
 export default function MovieCard({ movie, isFavorite, onToggleFavorite }) {
   const [comments, setComments] = useState([]);
@@ -12,7 +12,7 @@ export default function MovieCard({ movie, isFavorite, onToggleFavorite }) {
 
   const fetchComments = async () => {
     try {
-      const res = await axios.get(`/api/comments/${movie.id}`, getAuthHeaders());
+      const res = await api.get(`/api/comments/${movie.id}`, getAuthHeaders());
       setComments(res.data);
     } catch (err) {
       console.error(err);
@@ -29,7 +29,7 @@ export default function MovieCard({ movie, isFavorite, onToggleFavorite }) {
     e.preventDefault();
     if (!newComment.trim()) return;
     try {
-      await axios.post('/api/comments', {
+      await api.post('/api/comments', {
         tmdb_movie_id: movie.id,
         texto: newComment
       }, getAuthHeaders());
