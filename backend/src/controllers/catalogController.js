@@ -10,7 +10,7 @@ exports.getMovies = async (req, res) => {
 
         const personId = personResponse.data.results[0].id;
         const moviesResponse = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${TMDB_API_KEY}`);
-        
+
         res.json(moviesResponse.data);
     } catch (error) {
         console.error(error);
@@ -59,9 +59,9 @@ exports.getComments = async (req, res) => {
 
 exports.addComment = async (req, res) => {
     const { tmdb_movie_id, texto } = req.body;
-    
+
     if (!texto) return res.status(400).json({ error: 'Texto é obrigatório' });
-    
+
     try {
         const [result] = await db.execute(
             'INSERT INTO comentarios (usuario_id, tmdb_movie_id, texto) VALUES (?, ?, ?)',

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Link, useSearchParams } from 'react-router-dom';
 
 export default function ResetPassword() {
@@ -21,7 +21,7 @@ export default function ResetPassword() {
     }
 
     try {
-      const response = await axios.post('/api/reset-password', { token, novaSenha });
+      const response = await api.post('reset-password', { token, novaSenha });
       setMessage(response.data.message);
     } catch (err) {
       setError(err.response?.data?.error || 'Ocorreu um erro');

@@ -12,7 +12,7 @@ export default function MovieCard({ movie, isFavorite, onToggleFavorite }) {
 
   const fetchComments = async () => {
     try {
-      const res = await api.get(`/api/comments/${movie.id}`, getAuthHeaders());
+      const res = await api.get(`comments/${movie.id}`);
       setComments(res.data);
     } catch (err) {
       console.error(err);
@@ -29,10 +29,10 @@ export default function MovieCard({ movie, isFavorite, onToggleFavorite }) {
     e.preventDefault();
     if (!newComment.trim()) return;
     try {
-      await api.post('/api/comments', {
+      await api.post('comments', {
         tmdb_movie_id: movie.id,
         texto: newComment
-      }, getAuthHeaders());
+      });
       setNewComment('');
       fetchComments();
     } catch (err) {

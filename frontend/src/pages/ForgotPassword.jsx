@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Link } from 'react-router-dom';
 
 export default function ForgotPassword() {
@@ -13,7 +13,7 @@ export default function ForgotPassword() {
     setError('');
 
     try {
-      const response = await axios.post('/api/forgot-password', { email });
+      const response = await api.post('forgot-password', { email });
       setMessage(response.data.message);
     } catch (err) {
       setError(err.response?.data?.error || 'Ocorreu um erro');
