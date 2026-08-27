@@ -41,57 +41,59 @@ export default function MovieCard({ movie, isFavorite, onToggleFavorite }) {
   };
 
   return (
-    <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '10px', background: 'white' }}>
+    <div className="movie-card">
       {movie.poster_path ? (
-        <img
-          src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-          alt={movie.title}
-          style={{ width: '100%', borderRadius: '4px' }}
+        <img 
+          src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} 
+          alt={movie.title} 
+          className="movie-poster"
         />
       ) : (
-        <div style={{ width: '100%', height: '300px', background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Sem Imagem</div>
+        <div className="movie-poster" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Sem Imagem</div>
       )}
+      
+      <div className="movie-info">
+        <h4>{movie.title}</h4>
+        <p title={movie.overview}>{movie.overview || 'Sem sinopse disponível.'}</p>
 
-      <h4 style={{ margin: '10px 0' }}>{movie.title}</h4>
-      <p style={{ fontSize: '12px', color: '#555', height: '60px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {movie.overview}
-      </p>
+        <div className="movie-actions">
+          <button 
+            onClick={onToggleFavorite}
+            className={`btn-favorite ${isFavorite ? 'active' : ''}`}
+          >
+            {isFavorite ? '★ Favorito' : '☆ Adicionar Favorito'}
+          </button>
 
-      <button
-        onClick={onToggleFavorite}
-        style={{ background: isFavorite ? '#28a745' : '#007bff', marginBottom: '10px' }}
-      >
-        {isFavorite ? '★ Favorito' : '☆ Adicionar Favorito'}
-      </button>
-
-      <button
-        onClick={() => setShowComments(!showComments)}
-        style={{ background: '#6c757d' }}
-      >
-        {showComments ? 'Esconder Comentários' : 'Ver Comentários'}
-      </button>
-
-      {showComments && (
-        <div style={{ marginTop: '10px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-          <form onSubmit={handleAddComment} style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-            <input
-              type="text"
-              value={newComment}
-              onChange={e => setNewComment(e.target.value)}
-              placeholder="Novo comentário..."
-              style={{ margin: 0, padding: '5px' }}
-            />
-            <button type="submit" style={{ width: 'auto', padding: '5px 10px' }}>+</button>
-          </form>
-
-          <ul style={{ paddingLeft: '20px', margin: 0, fontSize: '12px', maxHeight: '100px', overflowY: 'auto' }}>
-            {comments.length === 0 ? <li>Sem comentários</li> : comments.map(c => (
-              <li key={c.id}>{c.texto}</li>
-            ))}
-          </ul>
+          <button 
+            onClick={() => setShowComments(!showComments)}
+            className="btn-secondary"
+          >
+            {showComments ? 'Ocultar Comentários' : 'Ver Comentários'}
+          </button>
         </div>
-      )}
+
+        {showComments && (
+          <div className="comments-section">
+            <form onSubmit={handleAddComment} className="comment-form">
+              <input 
+                type="text" 
+                value={newComment} 
+                onChange={e => setNewComment(e.target.value)} 
+                placeholder="Escreva algo..." 
+              />
+              <button type="submit">Enviar</button>
+            </form>
+            
+            <ul className="comments-list">
+              {comments.length === 0 ? (
+                <li style={{ textAlign: 'center', color: '#9ca3af' }}>Nenhum comentário ainda.</li>
+              ) : comments.map(c => (
+                <li key={c.id}>{c.texto}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-

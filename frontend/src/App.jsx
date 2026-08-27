@@ -39,45 +39,47 @@ function App() {
   }
 
   return (
-    <div className="container">
-      <h2>{isLogin ? 'Login' : 'Registrar'}</h2>
-      <form onSubmit={handleSubmit}>
-        {!isLogin && (
+    <div className="auth-wrapper">
+      <div className="container">
+        <h2>{isLogin ? 'Login' : 'Registrar'}</h2>
+        <form onSubmit={handleSubmit}>
+          {!isLogin && (
+            <input 
+              type="text" 
+              placeholder="Nome" 
+              value={nome} 
+              onChange={(e) => setNome(e.target.value)} 
+              required 
+            />
+          )}
           <input 
-            type="text" 
-            placeholder="Nome" 
-            value={nome} 
-            onChange={(e) => setNome(e.target.value)} 
+            type="email" 
+            placeholder="Email" 
+            value={email} 
+            onChange={(e) => setEmail(e.target.value)} 
             required 
           />
-        )}
-        <input 
-          type="email" 
-          placeholder="Email" 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          required 
-        />
-        <input 
-          type="password" 
-          placeholder="Senha" 
-          value={password} 
-          onChange={(e) => setPassword(e.target.value)} 
-          required 
-        />
-        <button type="submit">{isLogin ? 'Entrar' : 'Cadastrar'}</button>
-      </form>
-      <p style={{ color: 'red', fontSize: '14px' }}>{message}</p>
-      <button 
-        type="button" 
-        style={{ background: 'transparent', color: '#007bff', marginTop: '10px' }} 
-        onClick={() => {
-          setIsLogin(!isLogin);
-          setMessage('');
-        }}
-      >
-        {isLogin ? 'Não tem conta? Registre-se' : 'Já tem conta? Faça Login'}
-      </button>
+          <input 
+            type="password" 
+            placeholder="Senha" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)} 
+            required 
+          />
+          <button type="submit">{isLogin ? 'Entrar' : 'Cadastrar'}</button>
+        </form>
+        {message && <p style={{ color: message.includes('Sucesso') ? '#10b981' : '#ef4444', fontSize: '14px', textAlign: 'center', marginTop: '10px' }}>{message}</p>}
+        <button 
+          type="button" 
+          className="btn-secondary"
+          onClick={() => {
+            setIsLogin(!isLogin);
+            setMessage('');
+          }}
+        >
+          {isLogin ? 'Criar uma conta' : 'Já tenho conta'}
+        </button>
+      </div>
     </div>
   );
 }

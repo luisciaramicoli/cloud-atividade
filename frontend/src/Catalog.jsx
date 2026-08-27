@@ -53,18 +53,18 @@ export default function Catalog({ onLogout }) {
   };
 
   return (
-    <div style={{ padding: '20px', width: '100%', maxWidth: '800px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="catalog-container">
+      <div className="catalog-header">
         <h2>Catálogo de Filmes (Tom Hanks)</h2>
-        <button onClick={onLogout} style={{ width: 'auto', background: '#dc3545' }}>Sair</button>
+        <button onClick={onLogout} style={{ width: 'auto' }} className="btn-danger">Sair</button>
       </div>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', marginTop: '20px' }}>
+      {error && <p style={{ color: '#ef4444', textAlign: 'center' }}>{error}</p>}
+      
+      <div className="movie-grid">
         {movies.map(movie => (
-          <MovieCard
-            key={movie.id}
-            movie={movie}
+          <MovieCard 
+            key={movie.id} 
+            movie={movie} 
             isFavorite={favorites.some(f => f.tmdb_movie_id === movie.id)}
             onToggleFavorite={() => toggleFavorite(movie)}
           />
