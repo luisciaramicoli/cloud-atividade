@@ -11,7 +11,7 @@ exports.getMovies = async (req, res) => {
         const personId = personResponse.data.results[0].id;
         const moviesResponse = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${TMDB_API_KEY}`);
         
-        res.json(moviesResponse.data.cast);
+        res.json(moviesResponse.data);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Erro ao buscar dados na TMDB' });

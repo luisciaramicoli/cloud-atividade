@@ -9,3 +9,4 @@ app.use(express.json());
 app.use('/', authRoutes);
 
 module.exports = app;
+

@@ -36,3 +36,4 @@ exports.resetPassword = async (req, res) => {
         res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
     }
 };
+

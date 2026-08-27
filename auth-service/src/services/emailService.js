@@ -5,8 +5,8 @@ const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || "sandbox.smtp.mailtrap.io",
     port: process.env.SMTP_PORT || 2525,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
     }
 });
 
@@ -20,3 +20,4 @@ const sendResetEmail = async (to, resetLink) => {
 };
 
 module.exports = { sendResetEmail };
+

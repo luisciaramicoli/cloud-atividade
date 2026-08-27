@@ -28,7 +28,7 @@ exports.login = async (req, res) => {
     try {
         const [rows] = await db.execute('SELECT * FROM usuarios WHERE email = ?', [email]);
         if (rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
-        
+
         const user = rows[0];
         const match = await bcrypt.compare(password, user.senha_hash);
         if (!match) return res.status(401).json({ error: 'Senha incorreta' });
@@ -46,17 +46,17 @@ exports.forgotPassword = async (req, res) => {
         const [rows] = await db.execute('SELECT * FROM usuarios WHERE email = ?', [email]);
         if (rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
         const user = rows[0];
-        
+
         const token = uuidv4();
-        const expiracao = new Date(Date.now() + 30 * 60000); 
-        
+        const expiracao = new Date(Date.now() + 30 * 60000);
+
         await db.execute(
             'INSERT INTO reset_tokens (token, usuario_id, expira_em) VALUES (?, ?, ?)',
             [token, user.id, expiracao]
         );
 
         const resetLink = `${PUBLIC_URL}/reset-password?token=${token}`;
-        
+
         await sendResetEmail(user.email, resetLink);
 
         res.json({ message: 'E-mail de recuperação enviado' });
@@ -71,18 +71,19 @@ exports.resetPassword = async (req, res) => {
     try {
         const [tokens] = await db.execute('SELECT * FROM reset_tokens WHERE token = ?', [token]);
         if (tokens.length === 0) return res.status(400).json({ error: 'Token inválido' });
-        
+
         const resetData = tokens[0];
         if (resetData.usado) return res.status(400).json({ error: 'Token já foi utilizado' });
         if (new Date() > new Date(resetData.expira_em)) return res.status(400).json({ error: 'Token expirado' });
 
         const hashedPassword = await bcrypt.hash(novaSenha, 10);
-        
+
         await db.execute('UPDATE usuarios SET senha_hash = ? WHERE id = ?', [hashedPassword, resetData.usuario_id]);
         await db.execute('UPDATE reset_tokens SET usado = TRUE WHERE id = ?', [resetData.id]);
-        
+
         res.json({ message: 'Senha alterada com sucesso' });
     } catch (error) {
         res.status(500).json({ error: 'Erro ao resetar senha' });
     }
 };
+
