@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, Link } from 'react-router-dom';
 import api from './services/api';
 import Catalog from './pages/Catalog';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 
-function AuthForm({ setToken }) {
+function AuthForm({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
@@ -22,9 +22,13 @@ function AuthForm({ setToken }) {
       const response = await api.post(endpoint, payload);
 
       setMessage(response.data.message || 'Sucesso!');
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-        setToken(response.data.token);
+
+      // Se for login, o backend já definiu o cookie HttpOnly e retornou o perfil
+      if (isLogin && response.data.user) {
+        onLoginSuccess(response.data.user);
+      } else if (!isLogin) {
+        setIsLogin(true);
+        setPassword('');
       }
     } catch (error) {
       setMessage(error.response?.data?.error || 'Ocorreu um erro');
@@ -61,7 +65,7 @@ function AuthForm({ setToken }) {
           />
           <button type="submit">{isLogin ? 'Entrar' : 'Cadastrar'}</button>
         </form>
-        {message && <p style={{ color: message.includes('Sucesso') ? '#10b981' : '#ef4444', fontSize: '14px', textAlign: 'center', marginTop: '10px' }}>{message}</p>}
+        {message && <p style={{ color: message.includes('Sucesso') || message.includes('criado') ? '#10b981' : '#ef4444', fontSize: '14px', textAlign: 'center', marginTop: '10px' }}>{message}</p>}
 
         {isLogin && (
           <div style={{ textAlign: 'center', marginTop: '10px' }}>
@@ -85,18 +89,60 @@ function AuthForm({ setToken }) {
 }
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
+  // Validar sessão no backend ao carregar a aplicação (via cookie HttpOnly)
+  useEffect(() => {
+    api.get('/me')
+      .then((res) => {
+        if (res.data?.user) {
+          setCurrentUser(res.data.user);
+        }
+      })
+      .catch(() => {
+        setCurrentUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/logout');
+    } catch (e) {
+      console.error(e);
+    }
+    setCurrentUser(null);
     navigate('/');
   };
 
+  const handleLoginSuccess = (userData) => {
+    setCurrentUser(userData);
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#fff' }}>
+        Carregando...
+      </div>
+    );
+  }
+
   return (
     <Routes>
-      <Route path="/" element={token ? <Catalog onLogout={handleLogout} /> : <AuthForm setToken={setToken} />} />
+      <Route
+        path="/"
+        element={
+          currentUser ? (
+            <Catalog onLogout={handleLogout} currentUser={currentUser} />
+          ) : (
+            <AuthForm onLoginSuccess={handleLoginSuccess} />
+          )
+        }
+      />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>

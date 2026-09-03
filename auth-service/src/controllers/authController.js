@@ -87,3 +87,45 @@ exports.resetPassword = async (req, res) => {
     }
 };
 
+exports.authorize = async (req, res) => {
+    const { userId, requiredRole, action } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId é obrigatório' });
+
+    try {
+        const [rows] = await db.execute('SELECT id, nome, email, role FROM usuarios WHERE id = ?', [userId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
+
+        const user = rows[0];
+        const userRole = user.role || 'user';
+        const isAdmin = userRole === 'admin';
+
+        if (requiredRole === 'admin' && !isAdmin) {
+            return res.status(403).json({
+                allowed: false,
+                error: 'Permissão negada: ação restrita a administradores.',
+                user: { id: user.id, nome: user.nome, role: userRole }
+            });
+        }
+
+        return res.json({
+            allowed: true,
+            user: { id: user.id, nome: user.nome, role: userRole }
+        });
+    } catch (error) {
+        console.error('Erro na autorização do auth-service:', error);
+        return res.status(500).json({ error: 'Erro interno no auth-service' });
+    }
+};
+
+exports.listUsers = async (req, res) => {
+    try {
+        const [rows] = await db.execute('SELECT id, nome, email, role, criado_em FROM usuarios ORDER BY id ASC');
+        res.json(rows);
+    } catch (error) {
+        console.error('Erro ao listar usuários:', error);
+        res.status(500).json({ error: 'Erro ao listar usuários' });
+    }
+};
+

@@ -33,5 +33,6 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8218}
+      - PORT=3000
     restart: always
 
