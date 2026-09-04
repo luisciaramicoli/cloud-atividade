@@ -5,16 +5,21 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secret123';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
 
 const extractToken = (req) => {
-    // 1. Prioriza o cookie HttpOnly (tratamento seguro exclusivamente no backend)
-    if (req.headers.cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)token=([^;]+)/);
-        if (match) return decodeURIComponent(match[1]);
-    }
-    // 2. Fallback para header Authorization (compatibilidade com ferramentas e APIs externas)
+    // 1. Prioriza header Authorization Bearer se fornecido com token (Flashpost / Postman / cURL)
     const authHeader = req.headers['authorization'];
     if (authHeader && authHeader.startsWith('Bearer ')) {
-        return authHeader.split(' ')[1];
+        const tokenFromHeader = authHeader.split(' ')[1]?.trim();
+        if (tokenFromHeader && tokenFromHeader !== 'undefined' && tokenFromHeader !== 'null') {
+            return tokenFromHeader;
+        }
     }
+
+    // 2. Fallback para Cookie HttpOnly (utilizado pelo Frontend no navegador)
+    if (req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+        if (match && match[1]) return decodeURIComponent(match[1]);
+    }
+
     return null;
 };
 

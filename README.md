@@ -1,4 +1,4 @@
-# Atividade de Cloud (@siriani)
+# Atividade de Cloud — Professor: [github.com/siriani](https://github.com/siriani)
 
 Este repositório contém a implementação da atividade de Cloud, com Frontend em React (Vite) e Backend em Node.js (Express) com MariaDB, integrados à API da TMDB.
 
@@ -46,7 +46,31 @@ A ação exclusiva implementada é a **Moderação de Comentários** (`DELETE /a
 
 ---
 
-### 3. Segurança de Credenciais e Roles: Tratamento Exclusivo no Backend
+### 3. Demonstração Prática (Requisito 4)
+
+Para demonstrar a validação e obter os prints dos dois cenários:
+
+1. **Criar dois usuários no sistema:**
+   - Exemplo: `user@teste.com` (usuário comum) e `admin@teste.com` (administrador).
+2. **Promover o administrador no banco de dados MariaDB:**
+   ```sql
+   UPDATE usuarios SET role = 'admin' WHERE email = 'admin@teste.com';
+   ```
+3. **Cenário 1 — Usuário comum tenta moderar (Recebe 403 Forbidden):**
+   - Comentário postado por outro autor (ex: ID `10`).
+   - O usuário comum tenta apagar o comentário de outro usuário chamando diretamente `DELETE /api/comments/10`.
+   - **Resultado:** O backend recusa e retorna **`HTTP 403 Forbidden`** com a mensagem:
+     `{"error": "Acesso negado: apenas administradores podem apagar comentários de outros usuários."}`.
+   - *Print 1:* Captura da resposta 403 (via Postman, cURL ou na interface).
+4. **Cenário 2 — Administrador modera o mesmo comentário (Recebe 200 OK):**
+   - Conectado como `admin@teste.com`, executa a mesma exclusão `DELETE /api/comments/10`.
+   - **Resultado:** O backend autoriza e retorna **`HTTP 200 OK`** com a mensagem:
+     `{"message": "Comentário excluído com sucesso (Ação de Moderação/Admin)"}`.
+   - *Print 2:* Captura da exclusão com sucesso como admin.
+
+---
+
+### 4. Segurança de Credenciais e Roles: Tratamento Exclusivo no Backend
 
 Seguindo as melhores práticas de segurança corporativa e desenvolvimento web:
 - **Zero Credenciais no Frontend (Cookies HttpOnly):** O token JWT não é exposto ao JavaScript do cliente e não é gravado em `localStorage`. No login, o backend define um cookie `HttpOnly; SameSite=Lax; Path=/`, garantindo imunidade a ataques de injeção XSS que tentem ler ou roubar a credencial. Todas as requisições subsequentes utilizam o cookie automaticamente com `withCredentials: true`. A validação e encerramento de sessão ocorrem através dos endpoints `/api/me` e `/api/logout`.
@@ -54,7 +78,7 @@ Seguindo as melhores práticas de segurança corporativa e desenvolvimento web:
 
 ---
 
-### 4. Resposta Técnica: Padrão A ou Padrão B?
+### 5. Resposta Técnica: Padrão A ou Padrão B? (Requisito 5)
 
 > **Pergunta:** Qual dos dois padrões da seção de arquitetura o seu auth-service usa hoje? E o que mudaria no seu código se fosse pro outro padrão?
 
