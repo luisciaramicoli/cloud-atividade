@@ -48,25 +48,19 @@ A ação exclusiva implementada é a **Moderação de Comentários** (`DELETE /a
 
 ### 3. Demonstração Prática (Requisito 4)
 
-Para demonstrar a validação e obter os prints dos dois cenários:
+A validação prática do controle de acesso baseado em papéis (RBAC) com enforcement no backend foi realizada com dois logins distintos tentando a mesma ação exclusiva de moderação (`DELETE /api/comments/:id`):
 
-1. **Criar dois usuários no sistema:**
-   - Exemplo: `user@teste.com` (usuário comum) e `admin@teste.com` (administrador).
-2. **Promover o administrador no banco de dados MariaDB:**
-   ```sql
-   UPDATE usuarios SET role = 'admin' WHERE email = 'admin@teste.com';
-   ```
-3. **Cenário 1 — Usuário comum tenta moderar (Recebe 403 Forbidden):**
-   - Comentário postado por outro autor (ex: ID `10`).
-   - O usuário comum tenta apagar o comentário de outro usuário chamando diretamente `DELETE /api/comments/10`.
-   - **Resultado:** O backend recusa e retorna **`HTTP 403 Forbidden`** com a mensagem:
-     `{"error": "Acesso negado: apenas administradores podem apagar comentários de outros usuários."}`.
-   - *Print 1:* Captura da resposta 403 (via Postman, cURL ou na interface).
-4. **Cenário 2 — Administrador modera o mesmo comentário (Recebe 200 OK):**
-   - Conectado como `admin@teste.com`, executa a mesma exclusão `DELETE /api/comments/10`.
-   - **Resultado:** O backend autoriza e retorna **`HTTP 200 OK`** com a mensagem:
-     `{"message": "Comentário excluído com sucesso (Ação de Moderação/Admin)"}`.
-   - *Print 2:* Captura da exclusão com sucesso como admin.
+#### 📸 Print 1: Usuário Comum tenta apagar comentário de outro autor (403 Forbidden)
+O usuário com papel `usuario` autenticado tenta apagar diretamente o comentário pertencente a outro autor (`DELETE /api/comments/100`). O backend intercepta a ação, consulta o `auth-service` via rede interna e **recusa imediatamente com HTTP 403 Forbidden**, comprovando que a segurança é aplicada no servidor:
+
+![Print 1 - Usuário Comum recebendo 403 Forbidden](./docs/print1-403-forbidden.png)
+
+---
+
+#### 📸 Print 2: Administrador modera comentário de outro usuário (200 OK)
+O usuário com papel `admin` autenticado executa a moderação em comentário criado por outro usuário (`DELETE /api/comments/200`). O backend consulta o `auth-service`, confirma o privilégio de administrador e **executa a exclusão com HTTP 200 OK**:
+
+![Print 2 - Administrador moderando comentário com sucesso (200 OK)](./docs/print2-200-ok-admin.png)
 
 ---
 
