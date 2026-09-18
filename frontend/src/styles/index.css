@@ -172,10 +172,15 @@ button:hover {
   gap: 1rem;
 }
 
+.brand-user-row {
+  display: contents;
+}
+
 .brand-section {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  order: 1;
 }
 
 .brand-logo-icon {
@@ -189,6 +194,11 @@ button:hover {
   justify-content: center;
   box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand-text-block {
+  display: flex;
+  flex-direction: column;
 }
 
 .brand-title {
@@ -207,10 +217,19 @@ button:hover {
   letter-spacing: 0.01em;
 }
 
-.navbar-actions {
+.nav-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  order: 2;
+  margin-left: auto;
+}
+
+.user-identity-bar {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  order: 3;
 }
 
 .user-profile-chip {
@@ -252,6 +271,12 @@ button:hover {
   background-color: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
+}
+
+.nav-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .admin-nav-group {
@@ -322,6 +347,35 @@ button:hover {
 
 .btn-nav-docs svg {
   color: #0284c7;
+}
+
+.btn-nav-grafana {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: var(--shadow-subtle);
+}
+
+.btn-nav-grafana:hover {
+  background-color: var(--bg-canvas);
+  border-color: var(--border-medium);
+  color: #ea580c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-nav-grafana svg {
+  color: #f97316;
 }
 
 .btn-nav-logout {
@@ -1255,29 +1309,437 @@ button:hover {
 }
 
 /* ==========================================================================
-   RESPONSIVENESS
+   RESPONSIVENESS & MOBILE FIRST ADAPTATION
    ========================================================================== */
-@media (max-width: 768px) {
-  .navbar-container {
-    flex-direction: column;
-    align-items: flex-start;
+
+/* Tablets & Small Laptops (<= 1024px) */
+@media (max-width: 1024px) {
+  .movies-modern-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.25rem;
   }
 
-  .navbar-actions {
+  .modern-modal-card {
+    max-width: 92vw;
+  }
+}
+
+/* Tablets & Large Phones (<= 768px) */
+@media (max-width: 768px) {
+  /* Navbar */
+  .modern-navbar {
+    padding: 0;
+  }
+
+  .navbar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .brand-user-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
+  }
+
+  .brand-section {
+    order: unset;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: auto;
+  }
+
+  .user-identity-bar {
+    order: unset;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: auto;
+  }
+
+  .user-profile-chip {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+  }
+
+  .nav-buttons-group {
+    order: unset;
+    margin-left: 0;
+    margin-right: 0;
+    display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .admin-nav-group {
+    display: contents;
+  }
+
+  .btn-nav-admin,
+  .btn-nav-logs,
+  .btn-nav-docs,
+  .btn-nav-grafana,
+  .btn-nav-logout {
+    padding: 0.42rem 0.7rem;
+    font-size: 0.78rem;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Subheader Toolbar */
+  .toolbar-section {
+    padding: 0;
   }
 
   .toolbar-container {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.65rem 1rem;
   }
 
   .search-bar-wrapper {
     max-width: 100%;
+    width: 100%;
+  }
+
+  .search-input {
+    font-size: 0.88rem;
+    padding: 0.7rem 2.2rem 0.7rem 2.4rem;
+  }
+
+  .filter-tabs-group {
+    width: 100%;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .filter-tab {
+    flex: 1;
+    justify-content: center;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  /* Grid de Filmes */
+  .main-content-container {
+    padding: 1.25rem 1rem;
+  }
+
+  .movies-modern-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 1rem;
+  }
+
+  /* Modais */
+  .modal-backdrop-overlay {
+    padding: 0.75rem;
+    align-items: center;
+  }
+
+  .modern-modal-card {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: 14px;
+  }
+
+  .modal-header {
+    padding: 0.85rem 1.15rem;
+  }
+
+  .modal-title-group h3 {
+    font-size: 1.05rem;
+  }
+
+  .modal-title-group p {
+    font-size: 0.75rem;
   }
 
   .audit-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .table-responsive-box {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+  }
+
+  .modern-data-table th,
+  .modern-data-table td {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+}
+
+/* Mobile Phones (<= 480px) */
+@media (max-width: 480px) {
+  .modern-navbar {
+    padding: 0;
+  }
+
+  .navbar-container {
+    padding: 0.65rem 1rem;
+    gap: 0.55rem;
+  }
+
+  .brand-user-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .brand-logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .brand-logo-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .brand-title {
+    font-size: 1.15rem;
+  }
+
+  .brand-subtitle {
+    display: none;
+  }
+
+  .user-identity-bar {
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .user-profile-chip {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.76rem;
+    gap: 0.35rem;
+  }
+
+  .role-pill {
+    padding: 0.1rem 0.4rem;
+    font-size: 0.65rem;
+  }
+
+  .btn-nav-logout {
+    font-size: 0.74rem;
+    padding: 0.3rem 0.55rem;
+    gap: 0.25rem;
+  }
+
+  .nav-buttons-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.35rem;
+    width: 100%;
+  }
+
+  .btn-nav-admin,
+  .btn-nav-logs,
+  .btn-nav-docs,
+  .btn-nav-grafana {
+    justify-content: center;
+    font-size: 0.74rem;
+    padding: 0.4rem 0.45rem;
+    gap: 0.3rem;
+  }
+
+  /* Subheader Toolbar */
+  .toolbar-section {
+    padding: 0;
+  }
+
+  .toolbar-container {
+    padding: 0.5rem 1rem;
+    gap: 0.45rem;
+  }
+
+  .search-input {
+    padding: 0.55rem 2rem 0.55rem 2.2rem;
+    font-size: 0.82rem;
+    border-radius: 8px;
+  }
+
+  .filter-tabs-group {
+    gap: 0.4rem;
+  }
+
+  .filter-tab {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    border-radius: 8px;
+  }
+
+  /* Grid 2 colunas estilo app de streaming para celulares */
+  .main-content-container {
+    padding: 0.75rem 1rem;
+  }
+
+  .movies-modern-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .movie-card-modern {
+    border-radius: 10px;
+  }
+
+  .card-details {
+    padding: 0.5rem 0.55rem 0.6rem 0.55rem;
+  }
+
+  .movie-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .movie-overview {
+    display: none;
+  }
+
+  .poster-badges {
+    bottom: 5px;
+    left: 5px;
+    gap: 0.25rem;
+  }
+
+  .badge-meta {
+    padding: 0.12rem 0.35rem;
+    font-size: 0.65rem;
+    border-radius: 4px;
+  }
+
+  .btn-fav-float {
+    top: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .btn-fav-float svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .btn-toggle-comments {
+    font-size: 0.72rem;
+    padding: 0.35rem 0.45rem;
+    gap: 0.25rem;
+    border-radius: 6px;
+  }
+
+  .comments-counter-badge {
+    padding: 0.05rem 0.35rem;
+    font-size: 0.65rem;
+  }
+
+  /* Drawer de Comentários no Card */
+  .comments-drawer {
+    padding: 0.5rem;
+    max-height: 250px;
+  }
+
+  .comment-form {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .comment-input {
+    font-size: 0.78rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .btn-send-comment {
+    width: 100%;
+    justify-content: center;
+    padding: 0.45rem;
+    font-size: 0.75rem;
+  }
+
+  /* Modais no Mobile */
+  .modal-backdrop-overlay {
+    padding: 0.4rem;
+  }
+
+  .modern-modal-card {
+    border-radius: 12px;
+    max-height: 94vh;
+  }
+
+  .modal-header {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .modal-title-group h3 {
+    font-size: 0.95rem;
+  }
+
+  .modal-title-group p {
+    font-size: 0.68rem;
+  }
+
+  .stat-box {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .stat-label {
+    font-size: 0.68rem;
+  }
+
+  .stat-value {
+    font-size: 1.1rem;
+  }
+
+  /* Formulários de Autenticação (Login, Registro, Esqueci Senha) */
+  .auth-wrapper {
+    padding: 1rem 0.75rem;
+  }
+
+  .container {
+    padding: 1.5rem 1.15rem;
+    border-radius: 12px;
+  }
+
+  .container h2 {
+    font-size: 1.35rem;
+    margin-bottom: 1.15rem;
+  }
+
+  input {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  button[type="submit"],
+  .btn-secondary {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Telas Ultra-Estreitas (<= 330px) */
+@media (max-width: 330px) {
+  .movies-modern-grid {
     grid-template-columns: 1fr;
   }
 }

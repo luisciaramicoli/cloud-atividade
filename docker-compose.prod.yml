@@ -1,8 +1,15 @@
+# =============================================================================
+# CineCloud · Docker Compose de Produção (Imagens GHCR & Auto-Deploy Watchtower)
+# =============================================================================
+# Este compose utiliza as imagens empacotadas e publicadas pelo GitHub Actions no
+# GitHub Container Registry (GHCR), amarradas às tags de commit ou latest.
+# =============================================================================
+
 services:
   app:
-    build: .
+    image: ghcr.io/${GHCR_OWNER:-luisciaramicoli}/cinecloud-app:${IMAGE_TAG:-latest}
     ports:
-      - "8218:3000"
+      - "${PORT_APP:-8218}:3000"
     environment:
       - DB_HOST=${DB_HOST}
       - DB_USER=${DB_USER}
@@ -23,10 +30,11 @@ services:
       retries: 3
       start_period: 5s
     restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   auth:
-    build: ./auth-service
-    # Sem porta exposta para fora (internal only)
+    image: ghcr.io/${GHCR_OWNER:-luisciaramicoli}/cinecloud-auth:${IMAGE_TAG:-latest}
     environment:
       - DB_HOST=${DB_HOST}
       - DB_USER=${DB_USER}
@@ -50,10 +58,11 @@ services:
       retries: 3
       start_period: 5s
     restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   log-service:
-    build: ./log-service
-    # Sem porta exposta para fora (internal only)
+    image: ghcr.io/${GHCR_OWNER:-luisciaramicoli}/cinecloud-log-service:${IMAGE_TAG:-latest}
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -69,6 +78,8 @@ services:
       retries: 2
       start_period: 5s
     restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   redis:
     image: redis:7-alpine
@@ -87,8 +98,6 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
-      - "--web.console.templates=/usr/share/prometheus/consoles"
       - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
@@ -121,7 +130,19 @@ services:
       - prometheus
     restart: always
 
+  # Watchtower: monitora o GHCR e atualiza os containers automaticamente a cada 60s
+  watchtower:
+    image: containrrr/watchtower:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=60
+      - WATCHTOWER_LABEL_ENABLE=true
+    restart: always
+
 volumes:
   redis_audit_data:
   prometheus_data:
   grafana_data:
+

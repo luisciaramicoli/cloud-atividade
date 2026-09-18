@@ -144,11 +144,23 @@ exports.getLogs = async (req, res) => {
  */
 exports.healthCheck = async (req, res) => {
   try {
-    const pong = await redis.ping();
-    const info = await redis.xlen(STREAM_KEY);
-    return res.json({
-      status: 'ok',
-      redis: pong === 'PONG' ? 'connected' : pong,
+    if (redis.status !== 'ready') {
+      throw new Error(`Redis is not ready (current status: ${redis.status})`);
+    }
+    const pongPromise = redis.ping();
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Redis ping timeout')), 1500));
+    const pong = await Promise.race([pongPromise, timeoutPromise]);
+    let info = 0;
+    try {
+      info = await redis.xlen(STREAM_KEY);
+    } catch (_) {}
+
+    return res.status(200).json({
+      status: 'healthy',
+      service: 'log-service',
+      checks: {
+        redis: pong === 'PONG' ? 'connected' : pong
+      },
       stream: STREAM_KEY,
       total_events_in_stream: info,
       timestamp: new Date().toISOString()
@@ -156,9 +168,15 @@ exports.healthCheck = async (req, res) => {
   } catch (error) {
     return res.status(503).json({
       status: 'unhealthy',
+      service: 'log-service',
+      checks: {
+        redis: 'disconnected'
+      },
       error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 };
+
+exports.normalizeEvent = normalizeEvent;
 

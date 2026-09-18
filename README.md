@@ -13,6 +13,8 @@ Este repositório contém a implementação da atividade de Cloud, com Frontend 
 - **NOVO (Atividade 4):** Controle de Acesso Baseado em Papéis (RBAC) com enforcement no backend e moderação de comentários.
 - **NOVO (Atividade 5):** Observabilidade & Logs de Auditoria — Microsserviço próprio (`log-service`) com Redis Streams, padrão CloudEvents v1.0, ECS e NIST SP 800-92.
 - **NOVO (Atividade Extra):** Documentação interativa das APIs com Swagger UI e especificação OpenAPI 3.0 para os 3 microsserviços (Catálogo, Auth e Logs).
+- **NOVO (Atividade Extra):** Observabilidade & Métricas com Prometheus e Healthchecks (Liveness & Readiness) com detecção de falha no Docker Compose.
+- **NOVO (Atividade Extra):** Pipeline de CI/CD com GitHub Actions, Testes Automatizados, Publicação no GHCR (com tags de commit) e Deploy Contínuo com Watchtower/Portainer.
 
 
 ## Atividade 4 · Controle de Acesso por Papel (RBAC de Verdade)
@@ -362,6 +364,428 @@ Abaixo é demonstrada a execução em tempo real de uma chamada via "Try it out"
 
 ---
 
+## Atividade Extra · Observabilidade: Métricas Prometheus e Healthchecks (Liveness & Readiness)
+
+### 1. Os Três Pilares da Observabilidade
+
+Observabilidade é o conjunto de sinais que um sistema emite sobre si mesmo para responder com precisão: *"está saudável? está lento? onde está o gargalo?"*, sem necessidade de abrir terminais ou inspecionar processos manualmente.
+
+Nesta plataforma, os três pilares foram completamente implementados e integrados:
+1. **Pilar 1 — Logs (Implementado na Atividade 5):** Eventos discretos e auditáveis estruturados nos padrões CloudEvents v1.0, ECS e NIST SP 800-92 com ingestão assíncrona em Redis Streams.
+2. **Pilar 2 — Métricas (Implementado nesta Atividade):** Sinais numéricos contínuos de desempenho (taxa de requisições, histograma de latência em percentis, memória heap e uptime) expostos via endpoint `/metrics` no formato oficial do Prometheus (OpenMetrics / text exposition format v0.0.4).
+3. **Pilar 3 — Tracing & Healthchecks (Liveness vs. Readiness):** Monitoramento de integridade ativo em todos os microsserviços via `/health`, avaliando a capacidade real de atendimento com sondas profundas em dependências vitais (MariaDB e Redis), orquestradas nativamente pelo Docker Compose.
+
+---
+
+### 2. Liveness vs. Readiness: Por que o `/health` não pode mentir
+
+Um erro comum na arquitetura de microsserviços é a implementação de um endpoint superficial:
+```javascript
+// ANTIPATTERN (Healthcheck Ingênuo / Falso Liveness)
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+```
+Se a instância do banco de dados (MariaDB) ou do Redis cair, esse endpoint ingênuo continuará respondendo `200 OK`, mas todas as requisições dos usuários falharão com erro `500`. O orquestrador (Docker Compose / Kubernetes) continuará roteando tráfego para um container incapacitado.
+
+**A abordagem adotada no CineCloud (Readiness Real):**
+- **Liveness:** O processo Node.js está em execução e o loop de eventos está respondendo a conexões HTTP.
+- **Readiness:** O serviço testa ativamente se suas **dependências essenciais** estão operacionais antes de responder:
+  - **`app` (Catálogo):** Executa `await connection.ping()` no pool do MariaDB. Se o banco falhar, responde com **HTTP 503 Service Unavailable**.
+  - **`auth-service` (Autenticação):** Executa `await connection.ping()` no MariaDB. Se o banco falhar, responde com **HTTP 503 Service Unavailable**.
+  - **`log-service` (Auditoria):** Checa `redis.status === 'ready'` e executa `redis.ping()` com timeout restrito de 1.5s. Se o Redis estiver fora ou em recuperação, responde imediatamente com **HTTP 503 Service Unavailable**.
+
+Exemplo de retorno de sucesso (`200 OK`):
+```json
+{
+  "status": "healthy",
+  "service": "log-service",
+  "checks": {
+    "redis": "connected"
+  },
+  "stream": "audit_events",
+  "total_events_in_stream": 22,
+  "timestamp": "2026-09-18T17:47:12.240Z"
+}
+```
+
+Exemplo de retorno em caso de falha de dependência (`503 Service Unavailable`):
+```json
+{
+  "status": "unhealthy",
+  "service": "log-service",
+  "checks": {
+    "redis": "disconnected"
+  },
+  "error": "Redis is not ready (current status: reconnecting)",
+  "timestamp": "2026-09-18T17:49:10.000Z"
+}
+```
+
+---
+
+### 3. Docker Compose Healthchecks Nativos
+
+No `docker-compose.yml`, os serviços contam com diretivas nativas de `healthcheck`. Para evitar dependência de pacotes externos como `curl` ou `wget` dentro das imagens dos containers, os testes utilizam o runtime Node.js nativo com `fetch`:
+
+```yaml
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 2
+      start_period: 5s
+```
+
+E no container do Redis:
+```yaml
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 2
+```
+
+---
+
+### 4. A Prova do Crime: Detecção de Falha e Auto-Recuperação
+
+Para comprovar que o healthcheck reflete a realidade do sistema sem intervenção manual, foi executado o teste prático de falha do Redis:
+
+#### Passo 1: Estado Normal (Todos Saudáveis)
+Com todos os serviços e dependências operando normalmente, o Docker reporta todos os containers com status `(healthy)`:
+```bash
+$ docker ps --format "table {{.Names}}\t{{.Status}}"
+NAMES                           STATUS
+cloud-atividade-log-service-1   Up 10 seconds (healthy)
+cloud-atividade-app-1           Up About a minute (healthy)
+cloud-atividade-auth-1          Up About a minute (healthy)
+cloud-atividade-redis-1         Up 22 seconds (healthy)
+```
+
+#### Passo 2: Simulação de Falha (`docker compose stop redis`)
+Interrompemos intencionalmente o container do Redis. Em menos de 15 segundos (intervalo de 5s × 2 retentativas):
+- O endpoint `/health` do `log-service` detecta a ausência do Redis e passa a responder `HTTP 503`.
+- O healthcheck do Docker detecta o código de saída de falha (`process.exit(1)`).
+- O container do `log-service` transiciona automaticamente para o status **`(unhealthy)`**, enquanto `app` e `auth` (que dependem apenas do MariaDB) permanecem saudáveis:
+
+```bash
+$ docker compose stop redis
+✔ Container cloud-atividade-redis-1 Stopped
+
+$ docker ps --format "table {{.Names}}\t{{.Status}}"
+NAMES                           STATUS
+cloud-atividade-log-service-1   Up 26 seconds (unhealthy)
+cloud-atividade-app-1           Up About a minute (healthy)
+cloud-atividade-auth-1          Up About a minute (healthy)
+```
+
+#### Passo 3: Auto-Recuperação Autônoma (`docker compose start redis`)
+Ao religar o Redis, a conexão é restabelecida automaticamente pelo driver `ioredis`. O healthcheck passa novamente e o container volta a ser classificado como **`(healthy)`** de forma 100% autônoma, sem necessidade de reiniciar o container da aplicação:
+
+```bash
+$ docker compose start redis
+✔ Container cloud-atividade-redis-1 Started
+
+$ docker ps --format "table {{.Names}}\t{{.Status}}"
+NAMES                           STATUS
+cloud-atividade-log-service-1   Up 39 seconds (healthy)
+cloud-atividade-app-1           Up About a minute (healthy)
+cloud-atividade-auth-1          Up About a minute (healthy)
+cloud-atividade-redis-1         Up 10 seconds (healthy)
+```
+
+---
+
+### 5. Métricas no Formato Prometheus (`/metrics`)
+
+Todos os microsserviços (`app`, `auth-service` e `log-service`) expõem suas métricas em tempo real através do endpoint `GET /metrics` no formato padrão **Prometheus Text Exposition Format (OpenMetrics v0.0.4)**.
+
+#### Métricas Coletadas:
+1. **`service_info` (Gauge):** Metadados e ambiente (`service`, `environment`).
+2. **`process_uptime_seconds` (Gauge):** Tempo total de execução contínua do processo Node.js em segundos.
+3. **`nodejs_memory_heap_used_bytes` / `nodejs_memory_heap_total_bytes` (Gauge):** Consumo e alocação de memória da heap do motor V8.
+4. **`http_requests_total` (Counter):** Volume acumulado de requisições HTTP segregadas por `service`, `method`, `route` e `status` (ex: 200, 401, 403, 404, 500).
+5. **`http_request_duration_seconds` (Histogram):** Distribuição da latência das requisições em segundos organizada em buckets (`le="0.005"`, `le="0.01"`, `le="0.025"`, `le="0.05"`, `le="0.1"`, `le="0.25"`, `le="0.5"`, `le="1"`, `le="2.5"`, `le="5"`, `le="10"`, `le="+Inf"`), acompanhado dos somatórios acumulados (`_sum`) e total de observações (`_count`).
+
+#### Exemplo de Saída Real do Endpoint `/metrics` (Catalog Service):
+```prometheus
+# HELP service_info Metadados do serviço monitorado
+# TYPE service_info gauge
+service_info{service="catalog-service",environment="production"} 1
+
+# HELP process_uptime_seconds Tempo de atividade do processo em segundos
+# TYPE process_uptime_seconds gauge
+process_uptime_seconds{service="catalog-service"} 23.65
+
+# HELP nodejs_memory_heap_used_bytes Memoria heap utilizada pelo Node.js
+# TYPE nodejs_memory_heap_used_bytes gauge
+nodejs_memory_heap_used_bytes{service="catalog-service"} 12981936
+
+# HELP nodejs_memory_heap_total_bytes Memoria heap total alocada
+# TYPE nodejs_memory_heap_total_bytes gauge
+nodejs_memory_heap_total_bytes{service="catalog-service"} 14077952
+
+# HELP http_requests_total Total acumulado de requisicoes HTTP processadas
+# TYPE http_requests_total counter
+http_requests_total{service="catalog-service",method="GET",route="/health",status="200"} 4
+http_requests_total{service="catalog-service",method="GET",route="/filmes",status="404"} 1
+
+# HELP http_request_duration_seconds Latencia das requisicoes HTTP em segundos
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.005"} 0
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.01"} 0
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.025"} 0
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.05"} 0
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.1"} 0
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.25"} 0
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="0.5"} 4
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="1"} 4
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="2.5"} 4
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="5"} 4
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="10"} 4
+http_request_duration_seconds_bucket{service="catalog-service",method="GET",route="/health",le="+Inf"} 4
+http_request_duration_seconds_sum{service="catalog-service",method="GET",route="/health"} 1.322145
+http_request_duration_seconds_count{service="catalog-service",method="GET",route="/health"} 4
+```
+
+---
+
+### 6. Configuração de Scraping do Prometheus (`prometheus.yml`)
+
+O repositório inclui o arquivo de configuração [`prometheus.yml`](./prometheus.yml) pronto para conectar instâncias do Prometheus aos três serviços:
+
+```yaml
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "cinecloud-catalog"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["app:3000"]
+        labels:
+          service: "catalog-service"
+
+  - job_name: "cinecloud-auth"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["auth:3000"]
+        labels:
+          service: "auth-service"
+
+  - job_name: "cinecloud-log"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["log-service:3000"]
+        labels:
+          service: "log-service"
+```
+
+---
+
+### 7. Bônus: Prometheus + Grafana Provisionados Automaticamente no Docker Compose
+
+Para atender plenamente ao **Requisito 4 (Bônus: Prometheus + Grafana no Compose)**, a stack Docker foi equipada com containers dedicados para coleta e visualização gráfica de métricas, com provisionamento 100% declarativo (*Infrastructure as Code*):
+
+```mermaid
+flowchart LR
+    subgraph Services ["Microsserviços"]
+        Catalog["Catalog (:3000)"]
+        Auth["Auth-Service (:3000)"]
+        Log["Log-Service (:3000)"]
+    end
+
+    subgraph Monitoring ["Observabilidade & Métricas"]
+        Prometheus["Prometheus (:9090)<br/>Scrape a cada 5s"]
+        Grafana["Grafana (:3001)<br/>Dashboard CineCloud"]
+    end
+
+    Catalog -->|GET /metrics| Prometheus
+    Auth -->|GET /metrics| Prometheus
+    Log -->|GET /metrics| Prometheus
+    Prometheus -->|Datasource PromQL| Grafana
+```
+
+#### Provisionamento Declarativo (Zero Configuração Manual)
+Ao subir o ambiente com `docker compose up -d`, o Grafana é inicializado com:
+- **Datasource Prometheus Automático:** Arquivo [`grafana/provisioning/datasources/datasources.yml`](./grafana/provisioning/datasources/datasources.yml) conectando nativamente a `http://prometheus:9090`.
+- **Dashboard Pré-Carregado:** Arquivo [`grafana/provisioning/dashboards/cinecloud_dashboard.json`](./grafana/provisioning/dashboards/cinecloud_dashboard.json) carregado através do provider [`dashboards.yml`](./grafana/provisioning/dashboards/dashboards.yml).
+- **Acesso Anônimo Habilitado:** `GF_AUTH_ANONYMOUS_ENABLED=true` com papel `Admin`, permitindo abrir o painel diretamente no navegador sem telas de login ou senhas provisórias.
+
+#### Painéis Construídos no Dashboard CineCloud:
+1. **Status & Uptime dos Microsserviços (Stat Panels):** Monitora `process_uptime_seconds` de forma isolada para `catalog-service`, `auth-service` e `log-service`.
+2. **Requisições por Minuto — Throughput (Time Series):**
+   ```promql
+   sum by (service) (rate(http_requests_total[1m])) * 60
+   ```
+3. **Taxa de Erro 4xx e 5xx (Time Series):**
+   ```promql
+   (sum(rate(http_requests_total{status=~"[45].."}[1m])) or vector(0)) / (sum(rate(http_requests_total[1m])) > 0) * 100
+   ```
+4. **Latência P95 das Requisições (Time Series):**
+   ```promql
+   histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[1m])))
+   ```
+5. **Consumo de Memória Heap V8 (Time Series):**
+   ```promql
+   nodejs_memory_heap_used_bytes / 1024 / 1024
+   ```
+6. **Distribuição Total de Códigos HTTP (Donut Chart):** Proporção visual dos retornos HTTP `200`, `401`, `403`, `404` e `503`.
+
+#### Como Acessar:
+- **Pela Interface Web:** Clique no botão **"Grafana"** no cabeçalho superior da aplicação CineCloud.
+- **Link Direto do Grafana:** [`http://localhost:3001`](http://localhost:3001) (abre imediatamente o Dashboard CineCloud configurado).
+- **Link Direto do Prometheus:** [`http://localhost:9090`](http://localhost:9090) (console de consultas PromQL e status dos alvos em `/targets`).
+- **Atalhos do Gateway:** [`http://localhost:8218/grafana`](http://localhost:8218/grafana) e [`http://localhost:8218/prometheus`](http://localhost:8218/prometheus).
+
+---
+
+## Atividade Extra · CI/CD com GitHub Actions — Deploy sem Clicar em Nada
+
+Todo deploy manual baseado em comandos isolados no terminal ou cliques na interface do Portainer quebra a premissa fundamental da computação em nuvem: a **reprodutibilidade e a rastreabilidade**. Um deploy executado à mão não deixa registro no histórico de auditoria e depende da memória humana.
+
+Nesta atividade, o ciclo de vida completo da plataforma CineCloud foi automatizado através de um pipeline moderno de **CI/CD no GitHub Actions**, eliminando intervenções manuais e garantindo que cada versão em produção esteja vinculada diretamente a um commit auditável.
+
+---
+
+### 1. Conceito: CI vs. CD
+
+O pipeline é estritamente dividido em duas etapas com responsabilidades distintas:
+
+```mermaid
+flowchart LR
+    subgraph Developer ["Desenvolvedor"]
+        GitPush["git push (branch main)"]
+    end
+
+    subgraph CI ["Continuous Integration (GitHub Actions)"]
+        UnitTests["Testes Unitários & Smoke (node:test)"]
+        ComposeBuild["Build dos Containers (Docker Compose)"]
+        IntegrationTest["Smoke Test Headless (Healthchecks)"]
+        BreakPipeline{"Passou nos Testes?"}
+    end
+
+    subgraph CD ["Continuous Delivery (GHCR)"]
+        GHCRLogin["Auth GHCR via GITHUB_TOKEN"]
+        TagImages["Gera Tags: sha-&lt;commit&gt; e latest"]
+        PushImages["Publica Imagens no Registry"]
+    end
+
+    subgraph Deployment ["Continuous Deployment (Ambiente)"]
+        Watchtower["Watchtower (Auto-Pull 60s)"]
+        PortainerWebhook["Portainer (Webhook Deploy)"]
+        Production["Containers em Produção (Sem Clique)"]
+    end
+
+    GitPush --> UnitTests
+    UnitTests --> ComposeBuild
+    ComposeBuild --> IntegrationTest
+    IntegrationTest --> BreakPipeline
+    BreakPipeline -- Não (Falha) --> Abort["❌ Quebra Pipeline no GitHub"]
+    BreakPipeline -- Sim (Aprovado) --> GHCRLogin
+    GHCRLogin --> TagImages
+    TagImages --> PushImages
+    PushImages --> Watchtower
+    PushImages --> PortainerWebhook
+    Watchtower --> Production
+    PortainerWebhook --> Production
+```
+
+- **CI (Continuous Integration):** A cada `git push` ou `pull_request` na branch `main`, robôs do GitHub Actions constroem o ambiente e executam as suítes de testes automatizados (`node:test`) em todos os microsserviços (`backend`, `auth-service` e `log-service`), além de simular a subida dos containers com Docker Compose. Se qualquer teste falhar ou a imagem não compilar, o pipeline é **interrompido imediatamente com status vermelho**, impedindo a publicação de código quebrado.
+- **CD (Continuous Delivery & Deployment):** Se o CI for 100% aprovado, a nova versão é empacotada em imagens Docker multi-arquitetura, identificadas pela tag do commit (`sha-<hash>`) e publicadas no **GitHub Container Registry (GHCR)**. Em seguida, os containers em produção são atualizados automaticamente via **Watchtower** ou **Portainer Webhook**.
+
+---
+
+### 2. Workflow de CI: Testes Automatizados Reais
+
+> *"Pipeline que só builda não é CI."*
+
+Para garantir que o código realmente funciona antes de ir para o registry, foram criadas suítes de testes automatizados executadas via comando nativo `npm test` (`node --test`):
+
+1. **`backend/tests/smoke.test.js`:**
+   - Validação da especificação OpenAPI 3.0 (`openapi.json`).
+   - Validação do middleware coletor de métricas Prometheus (`metricsMiddleware.js`).
+   - Validação da geração e injeção do cabeçalho `x-correlation-id` / `traceId`.
+2. **`auth-service/tests/smoke.test.js`:**
+   - Validação criptográfica do hash e comparação de senhas com `bcrypt`.
+   - Validação do ciclo de vida de tokens JWT (assinatura, decodificação e verificação de assinatura inválida).
+   - Validação do coletor de métricas Prometheus do serviço de autenticação.
+3. **`log-service/tests/smoke.test.js`:**
+   - Validação da normalização estrutural de eventos nos padrões **CloudEvents v1.0** e **ECS**.
+   - Validação do coletor de métricas Prometheus do serviço de logs.
+4. **Smoke Test de Integração com Docker Compose:**
+   - Inicialização headless dos containers com `docker compose up -d redis log-service prometheus grafana`.
+   - Execução de probe HTTP real contra o endpoint `/health` e `/metrics`.
+
+O arquivo de configuração do workflow está localizado em [`.github/workflows/ci-cd.yml`](./.github/workflows/ci-cd.yml).
+
+---
+
+### 3. Publicação no Registry com Tags Rastreáveis (GHCR)
+
+Um dos erros mais críticos em operações de nuvem é utilizar apenas a tag `:latest`. Quando um container roda `:latest`, torna-se impossível saber qual versão do código-fonte está em execução e inviabiliza procedimentos de rollback seguro.
+
+No pipeline implementado, cada build no GitHub Actions gera **tags rastreáveis amarradas ao commit**:
+- **Tag do Commit (SHA Curto):** `sha-a1b2c3d` (identifica os primeiros 7 caracteres do commit).
+- **Tag Completa do Commit:** `<full-commit-sha>` (rastreabilidade absoluta).
+- **Tag Flutuante:** `latest` (para conveniência no ambiente de desenvolvimento).
+
+#### Imagens Publicadas no GitHub Container Registry:
+- `ghcr.io/luisciaramicoli/cinecloud-app:sha-<commit>`
+- `ghcr.io/luisciaramicoli/cinecloud-auth:sha-<commit>`
+- `ghcr.io/luisciaramicoli/cinecloud-log-service:sha-<commit>`
+
+A autenticação no GHCR é realizada nativamente pelo workflow utilizando o token temporário `${{ secrets.GITHUB_TOKEN }}` com permissão `packages: write`, sem necessidade de criar contas externas ou tokens de terceiros.
+
+---
+
+### 4. Segredos Fora do Repositório (Regra de Ouro da Nuvem)
+
+Seguindo estritamente a política de segurança desde a Atividade 2: **nenhuma credencial ou chave privada é salva no código-fonte, no Dockerfile ou embutida nas imagens**.
+
+#### Separação de Responsabilidades:
+| Variável / Segredo | Onde é Configurado no CI? | Onde é Configurado em Produção? | Finalidade |
+|---|---|---|---|
+| `DB_HOST` / `DB_USER` / `DB_PASSWORD` | GitHub Secrets | Portainer Stack / `.env` | Conexão com a base MariaDB externa. |
+| `DB_NAME` | GitHub Secrets | Portainer Stack / `.env` | Nome do banco de dados relacional. |
+| `TMDB_API_KEY` | GitHub Secrets | Portainer Stack / `.env` | Chave de integração com a API da TMDB. |
+| `JWT_SECRET` | GitHub Secrets | Portainer Stack / `.env` | Chave secreta de assinatura dos tokens JWT. |
+| `SMTP_USER` / `SMTP_PASS` | GitHub Secrets | Portainer Stack / `.env` | Credenciais Mailtrap para envio de e-mails. |
+| `PORTAINER_WEBHOOK_URL` | GitHub Secret Opcional | URL gerada na Stack do Portainer | Disparo automático de deploy via webhook. |
+
+---
+
+### 5. Deploy Contínuo: Zero Cliques no Ambiente de Produção
+
+Para que a nova imagem chegue ao servidor sem intervenção manual, a plataforma oferece duas opções de CD:
+
+#### Opção A: Deploy Autônomo com Watchtower (Recomendado)
+O arquivo de produção [`docker-compose.prod.yml`](./docker-compose.prod.yml) inclui o container do **Watchtower**:
+- O Watchtower consulta o GitHub Container Registry a cada 60 segundos (`WATCHTOWER_POLL_INTERVAL=60`).
+- Ao detectar que uma nova imagem foi enviada pelo GitHub Actions, ele faz o pull da imagem, reinicia os containers e limpa as imagens antigas (`WATCHTOWER_CLEANUP=true`), sem necessidade de qualquer clique do operador.
+
+#### Opção B: Deploy via Webhook do Portainer
+Ao criar a Stack no Portainer baseada no arquivo `docker-compose.prod.yml`:
+1. Habilite a opção **"Service Webhook"** na Stack do Portainer.
+2. Copie a URL do Webhook gerada.
+3. Cadastre a URL no repositório GitHub como um Secret com o nome `PORTAINER_WEBHOOK_URL`.
+4. A cada push aprovado no CI, o GitHub Actions dispara um `curl -X POST "$PORTAINER_WEBHOOK_URL"`, atualizando a stack instantaneamente.
+
+#### Como Executar a Stack de Produção (via GHCR):
+```bash
+# Iniciar a stack completa puxando imagens prontas do GHCR
+docker compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+### 6. Link para Execuções do GitHub Actions
+
+Todas as execuções do pipeline (com status verde para CI e CD) podem ser auditadas diretamente na interface pública do repositório:
+- **Aba Actions do Repositório:** [https://github.com/luisciaramicoli/cloud-atividade/actions](https://github.com/luisciaramicoli/cloud-atividade/actions)
+
+---
+
 ## Tecnologias
 - **Frontend:** React, Vite, Axios, React Router.
 - **Backend (API Gateway / Catálogo):** Node.js, Express, mysql2.
@@ -369,6 +793,7 @@ Abaixo é demonstrada a execução em tempo real de uma chamada via "Try it out"
 - **Microsserviço de Auditoria (Log-Service):** Node.js, Express, ioredis.
 - **Banco de Dados Relacional:** MariaDB.
 - **Armazenamento de Eventos e Trilha de Auditoria:** Redis 7 (Redis Streams + AOF Persistente).
+- **Métricas e Monitoramento:** Prometheus 3.x, Grafana 11.x (Provisionamento declarativo IaC).
 - **Infraestrutura:** Docker, Docker Compose (Multistage build).
 
 

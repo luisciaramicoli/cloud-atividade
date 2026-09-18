@@ -18,7 +18,8 @@ import {
   Clock,
   Sparkles,
   Layers,
-  BookOpen
+  BookOpen,
+  Activity
 } from 'lucide-react';
 
 export default function Catalog({ onLogout, currentUser }) {
@@ -138,44 +139,52 @@ export default function Catalog({ onLogout, currentUser }) {
       {/* Top Navbar */}
       <header className="modern-navbar">
         <div className="navbar-container">
-          {/* Branding */}
-          <div className="brand-section">
-            <div className="brand-logo-icon">
-              <Film size={22} />
+          {/* Top Row: Brand on Left, User & Logout on Right */}
+          <div className="brand-user-row">
+            <div className="brand-section">
+              <div className="brand-logo-icon">
+                <Film size={20} />
+              </div>
+              <div className="brand-text-block">
+                <h1 className="brand-title">CineCloud</h1>
+                <span className="brand-subtitle">Filmografia Tom Hanks</span>
+              </div>
             </div>
-            <div>
-              <h1 className="brand-title">CineCloud</h1>
-              <span className="brand-subtitle">Filmografia Tom Hanks</span>
+
+            <div className="user-identity-bar">
+              <div className="user-profile-chip">
+                <span className="user-name">{currentUser?.nome || 'Usuário'}</span>
+                <span className={`role-pill ${currentUser?.can_manage_users ? 'role-admin' : 'role-user'}`}>
+                  {currentUser?.can_manage_users ? (
+                    <>
+                      <ShieldCheck size={12} />
+                      <span>Admin</span>
+                    </>
+                  ) : (
+                    <span>Usuário</span>
+                  )}
+                </span>
+              </div>
+              <button onClick={onLogout} className="btn-nav-logout" title="Encerrar Sessão">
+                <LogOut size={15} />
+                <span className="logout-text">Sair</span>
+              </button>
             </div>
           </div>
 
-          {/* User Info & Actions */}
-          <div className="navbar-actions">
-            <div className="user-profile-chip">
-              <span className="user-name">{currentUser?.nome || 'Usuário'}</span>
-              <span className={`role-pill ${currentUser?.can_manage_users ? 'role-admin' : 'role-user'}`}>
-                {currentUser?.can_manage_users ? (
-                  <>
-                    <ShieldCheck size={13} />
-                    <span>Admin</span>
-                  </>
-                ) : (
-                  <span>Usuário</span>
-                )}
-              </span>
-            </div>
-
+          {/* Action Buttons Group */}
+          <div className="nav-buttons-group">
             {currentUser?.can_manage_users && (
-              <div className="admin-nav-group">
+              <>
                 <button onClick={openUsersModal} className="btn-nav-admin" title="Gestão de Usuários (RBAC)">
-                  <Users size={16} />
+                  <Users size={14} />
                   <span>Usuários</span>
                 </button>
                 <button onClick={openLogsModal} className="btn-nav-logs" title="Trilha de Auditoria (Redis Streams)">
-                  <Database size={16} />
+                  <Database size={14} />
                   <span>Auditoria</span>
                 </button>
-              </div>
+              </>
             )}
 
             <a
@@ -185,14 +194,20 @@ export default function Catalog({ onLogout, currentUser }) {
               className="btn-nav-docs"
               title="Documentação Interativa Swagger / OpenAPI"
             >
-              <BookOpen size={16} />
+              <BookOpen size={14} />
               <span>Swagger</span>
             </a>
 
-            <button onClick={onLogout} className="btn-nav-logout" title="Encerrar Sessão">
-              <LogOut size={16} />
-              <span>Sair</span>
-            </button>
+            <a
+              href={`${window.location.protocol}//${window.location.hostname}:3001`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-nav-grafana"
+              title="Painel de Métricas e Observabilidade Grafana"
+            >
+              <Activity size={14} />
+              <span>Grafana</span>
+            </a>
           </div>
         </div>
       </header>

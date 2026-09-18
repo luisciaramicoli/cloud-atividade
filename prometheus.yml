@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "cinecloud-catalog"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["app:3000"]
+        labels:
+          service: "catalog-service"
+
+  - job_name: "cinecloud-auth"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["auth:3000"]
+        labels:
+          service: "auth-service"
+
+  - job_name: "cinecloud-log"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["log-service:3000"]
+        labels:
+          service: "log-service"
+

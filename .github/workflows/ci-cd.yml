@@ -1,0 +1,197 @@
+name: CI/CD Pipeline - CineCloud
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # =========================================================================
+  # ETAPA 1: CI (Continuous Integration) - Testes Automatizados & Build Check
+  # =========================================================================
+  ci:
+    name: "CI · Testes & Validação de Build"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar Dependências & Executar Testes (Backend)
+        run: |
+          echo "::group::Backend Tests"
+          cd backend
+          npm install --omit=dev
+          npm test
+          echo "::endgroup::"
+
+      - name: Instalar Dependências & Executar Testes (Auth-Service)
+        run: |
+          echo "::group::Auth-Service Tests"
+          cd auth-service
+          npm install --omit=dev
+          npm test
+          echo "::endgroup::"
+
+      - name: Instalar Dependências & Executar Testes (Log-Service)
+        run: |
+          echo "::group::Log-Service Tests"
+          cd log-service
+          npm install --omit=dev
+          npm test
+          echo "::endgroup::"
+
+      - name: Validar Build de Todos os Containers (Docker Compose)
+        run: |
+          echo "::group::Docker Compose Build"
+          docker compose build
+          echo "::endgroup::"
+
+      - name: Teste de Integração Headless dos Containers
+        env:
+          DB_HOST: localhost
+          DB_USER: root
+          DB_PASSWORD: ci_test_password
+          DB_NAME: ci_cinecloud
+          TMDB_API_KEY: ci_tmdb_dummy_key
+          JWT_SECRET: ci_super_secret_jwt_key_12345
+        run: |
+          echo "::group::Smoke Integration Test"
+          # Sobe dependências e serviços de observabilidade
+          docker compose up -d redis log-service prometheus grafana
+          sleep 10
+          docker ps
+
+          # Validação de integridade do Redis e Log-Service
+          LOG_CONTAINER=$(docker compose ps -q log-service)
+          docker exec $LOG_CONTAINER node -e "
+            fetch('http://localhost:3000/health')
+              .then(r => {
+                if (!r.ok) process.exit(1);
+                console.log('✅ Log-Service /health respondeu com HTTP', r.status);
+              })
+              .catch(err => { console.error('❌ Falha:', err); process.exit(1); });
+          "
+
+          # Validação de métricas no Prometheus
+          docker exec $(docker compose ps -q prometheus) wget -q -O - http://localhost:9090/-/ready
+          echo "✅ Prometheus está pronto para scraping"
+
+          # Limpeza do ambiente de teste
+          docker compose down -v
+          echo "::endgroup::"
+
+  # =========================================================================
+  # ETAPA 2: CD (Continuous Delivery) - Publicação no GitHub Container Registry (GHCR)
+  # =========================================================================
+  cd:
+    name: "CD · Publicação no GHCR (Tags Rastreáveis)"
+    needs: [ci]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Autenticar no GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preparar Tags Rastreáveis (Commit SHA & Latest)
+        id: meta
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "owner_lc=$OWNER_LC" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "REGISTRY_BASE=ghcr.io/${OWNER_LC}/cinecloud" >> $GITHUB_ENV
+
+      # --- 1. Build & Push: Backend / Frontend Gateway (cinecloud-app) ---
+      - name: Build & Push Imagem · cinecloud-app
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-app:latest
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-app:sha-${{ steps.meta.outputs.short_sha }}
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-app:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- 2. Build & Push: Serviço de Autenticação (cinecloud-auth) ---
+      - name: Build & Push Imagem · cinecloud-auth
+        uses: docker/build-push-action@v5
+        with:
+          context: ./auth-service
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-auth:latest
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-auth:sha-${{ steps.meta.outputs.short_sha }}
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-auth:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- 3. Build & Push: Serviço de Auditoria (cinecloud-log-service) ---
+      - name: Build & Push Imagem · cinecloud-log-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./log-service
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-log-service:latest
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-log-service:sha-${{ steps.meta.outputs.short_sha }}
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-log-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Resumo das Imagens Publicadas
+        run: |
+          echo "### 🚀 Imagens Docker Publicadas com Sucesso no GHCR!" >> $GITHUB_STEP_SUMMARY
+          echo "| Imagem | Tag Mais Recente | Tag Rastreável (Commit) |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **App Gateway / SPA** | \`ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-app:latest\` | \`sha-${{ steps.meta.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Auth Service** | \`ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-auth:latest\` | \`sha-${{ steps.meta.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Log Service** | \`ghcr.io/${{ steps.meta.outputs.owner_lc }}/cinecloud-log-service:latest\` | \`sha-${{ steps.meta.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # =========================================================================
+  # ETAPA 3: Deploy Contínuo (Notificação Portainer Webhook / Watchtower)
+  # =========================================================================
+  deploy:
+    name: "CD · Notificação de Deploy Automático"
+    needs: [cd]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Acionar Webhook do Portainer (Se Configurado)
+        if: env.PORTAINER_WEBHOOK_URL != ''
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          echo "Disparando Webhook de Auto-Update no Portainer..."
+          curl -X POST "$PORTAINER_WEBHOOK_URL"
+          echo "Webhook disparado com sucesso!"
+
+      - name: Conclusão do Pipeline
+        run: |
+          echo "Pipeline de CI/CD finalizado. Imagens disponíveis para atualização automática via Watchtower ou Portainer."
+

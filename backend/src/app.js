@@ -2,8 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const apiRoutes = require('./routes/apiRoutes');
-
+const pool = require('./config/db');
 const correlationMiddleware = require('./middlewares/correlationMiddleware');
+const { metricsCollector, metricsEndpoint } = require('./middlewares/metricsMiddleware');
 
 const app = express();
 
@@ -13,6 +14,45 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(correlationMiddleware);
+app.use(metricsCollector);
+
+// Healthcheck com Readiness Real (testa conexão ativa com o MariaDB)
+app.get(['/health', '/api/health'], async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        await connection.ping();
+        connection.release();
+        return res.status(200).json({
+            status: 'healthy',
+            service: 'catalog-service',
+            checks: {
+                database: 'connected'
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (err) {
+        return res.status(503).json({
+            status: 'unhealthy',
+            service: 'catalog-service',
+            checks: {
+                database: 'disconnected'
+            },
+            error: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Endpoint de Métricas para Prometheus
+app.get('/metrics', metricsEndpoint('catalog-service'));
+
+// Atalhos para Grafana e Prometheus
+app.get('/grafana', (req, res) => {
+    res.redirect(`http://${req.hostname}:3001`);
+});
+app.get('/prometheus', (req, res) => {
+    res.redirect(`http://${req.hostname}:9090`);
+});
 
 // Swagger / OpenAPI documentation
 const openapiSpec = require('./docs/openapi.json');

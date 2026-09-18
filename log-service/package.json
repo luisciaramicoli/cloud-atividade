@@ -4,7 +4,8 @@
   "description": "Microsserviço de Logs e Auditoria de Segurança com Redis Streams",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.5",
