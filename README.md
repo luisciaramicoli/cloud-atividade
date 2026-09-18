@@ -122,18 +122,18 @@ flowchart TD
 
         subgraph RedisCluster ["Redis 7 (AOF + Volume Persistente)"]
             Stream["Stream: audit_events (MAXLEN ~ 50000)"]
-            DiskVolume[("Volume: redis_audit_data (/data/appendonly.aof)")]
+            DiskVolume[("Volume: redis_audit_data")]
         end
     end
 
     UI -->|HTTP / REST| Controller
     Controller -.->|RBAC Centralizado| Auth
-    Controller -->|Enfileira Evento Assíncrono| BufferQueue
-    BufferQueue -->|POST /logs/batch (a cada 500ms ou 10 itens)| LogAPI
+    Controller -->|Enfileira Evento Assincrono| BufferQueue
+    BufferQueue -->|POST /logs/batch em lotes| LogAPI
     BufferQueue -->|Flush Imediato em 403 Denied| LogAPI
     LogAPI -->|XADD audit_events MAXLEN ~ 50000| Stream
     Stream -.->|AOF Persistente| DiskVolume
-    Controller -->|GET /api/logs (Admin Only)| LogAPI
+    Controller -->|GET /api/logs - Admin Only| LogAPI
     LogAPI -->|XREVRANGE audit_events + -| Stream
 ```
 
