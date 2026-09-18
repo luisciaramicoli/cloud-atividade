@@ -199,7 +199,7 @@ export default function Catalog({ onLogout, currentUser }) {
             </a>
 
             <a
-              href={`${window.location.protocol}//${window.location.hostname}:3001`}
+              href="/grafana"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-nav-grafana"

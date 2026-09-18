@@ -13,6 +13,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_SERVICE_URL=http://auth:3000
       - LOG_SERVICE_URL=http://log-service:3000
+      - GRAFANA_HOST=grafana
+      - GRAFANA_PORT=3000
     depends_on:
       - auth
       - log-service
@@ -115,6 +117,8 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/cinecloud_dashboard.json
     volumes:
       - grafana_data:/var/lib/grafana

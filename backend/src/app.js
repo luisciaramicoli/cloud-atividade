@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const apiRoutes = require('./routes/apiRoutes');
@@ -12,6 +13,45 @@ app.use(cors({
     origin: true,
     credentials: true
 }));
+
+// Proxy reverso para Grafana (permite acesso pela mesma porta 8218 sem expor 3001)
+app.use('/grafana', (req, res) => {
+    if (req.originalUrl === '/grafana') {
+        return res.redirect(301, '/grafana/');
+    }
+
+    const grafanaHost = process.env.GRAFANA_HOST || 'grafana';
+    const grafanaPort = process.env.GRAFANA_PORT || 3000;
+
+    const options = {
+        hostname: grafanaHost,
+        port: grafanaPort,
+        path: req.originalUrl,
+        method: req.method,
+        headers: {
+            ...req.headers,
+            host: req.headers.host,
+            'x-forwarded-for': req.ip,
+            'x-forwarded-proto': req.protocol,
+            'x-forwarded-host': req.get('host'),
+        }
+    };
+
+    const proxyReq = http.request(options, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res, { end: true });
+    });
+
+    proxyReq.on('error', (err) => {
+        console.error('Grafana Proxy Error:', err.message);
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'Grafana indisponível via proxy reverso' });
+        }
+    });
+
+    req.pipe(proxyReq, { end: true });
+});
+
 app.use(express.json());
 app.use(correlationMiddleware);
 app.use(metricsCollector);
@@ -45,14 +85,6 @@ app.get(['/health', '/api/health'], async (req, res) => {
 
 // Endpoint de Métricas para Prometheus
 app.get('/metrics', metricsEndpoint('catalog-service'));
-
-// Atalhos para Grafana e Prometheus
-app.get('/grafana', (req, res) => {
-    res.redirect(`http://${req.hostname}:3001`);
-});
-app.get('/prometheus', (req, res) => {
-    res.redirect(`http://${req.hostname}:9090`);
-});
 
 // Swagger / OpenAPI documentation
 const openapiSpec = require('./docs/openapi.json');

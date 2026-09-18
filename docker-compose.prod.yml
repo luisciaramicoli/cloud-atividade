@@ -20,6 +20,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_SERVICE_URL=http://auth:3000
       - LOG_SERVICE_URL=http://log-service:3000
+      - GRAFANA_HOST=grafana
+      - GRAFANA_PORT=3000
     depends_on:
       - auth
       - log-service
@@ -94,7 +96,9 @@ services:
     restart: always
 
   prometheus:
-    image: prom/prometheus:latest
+    build:
+      context: .
+      dockerfile: ./prometheus/Dockerfile
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -102,7 +106,6 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     depends_on:
       - app
@@ -111,7 +114,9 @@ services:
     restart: always
 
   grafana:
-    image: grafana/grafana:latest
+    build:
+      context: .
+      dockerfile: ./grafana/Dockerfile
     ports:
       - "3001:3000"
     environment:
@@ -121,10 +126,10 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/cinecloud_dashboard.json
     volumes:
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
