@@ -2,12 +2,14 @@ const axios = require('axios');
 const db = require('../config/db');
 const { logFromReq } = require('../services/loggerService');
 
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
+
 const fallbackMovies = [
     { id: 862, title: 'Toy Story', overview: 'Led by Woody, Andy\'s toys live happily in his room until Andy\'s birthday brings Buzz Lightyear onto the scene.', poster_path: '/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg' },
     { id: 13, title: 'Forrest Gump', overview: 'A man with a low IQ has accomplished great things in his life and been present during significant historic events.', poster_path: '/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg' },
     { id: 857, title: 'O Resgate do Soldado Ryan', overview: 'Durante a Segunda Guerra Mundial, o capitão Miller e seus homens arriscam suas vidas para resgatar James Ryan.', poster_path: '/uqx37cS8cpHg8U35f9U5IBlrCV3.jpg' },
-    { id: 8358, title: 'Náufrago', overview: 'Chuck Noland sofre um acidente de avião e precisa sobreviver em uma ilha deserta.', poster_path: '/h2p0Q4B4M4aR4p2vE0YpXzKzL1T.jpg' },
-    { id: 594, title: 'O Terminal', overview: 'Um cidadão da Europa Oriental fica preso no aeroporto JFK após um golpe militar invalidar seu passaporte.', poster_path: '/tWkZ3u2jH5L0o6wN0FqU1Xy7Z.jpg' }
+    { id: 8358, title: 'Náufrago', overview: 'Chuck Noland sofre um acidente de avião e precisa sobreviver em uma ilha deserta.', poster_path: '/74hLDKjD5aGYOotO6esUVaeISa2.jpg' },
+    { id: 594, title: 'O Terminal', overview: 'Um cidadão da Europa Oriental fica preso no aeroporto JFK após um golpe militar invalidar seu passaporte.', poster_path: '/s2cx9y9tY6p0fS5Z6Hj47a9Z6b3.jpg' }
 ];
 
 exports.getMovies = async (req, res) => {
@@ -21,7 +23,12 @@ exports.getMovies = async (req, res) => {
         }
         const personId = personResponse.data.results[0].id;
         const moviesResponse = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${TMDB_API_KEY}`);
-        res.json(moviesResponse.data);
+        
+        let movies = moviesResponse.data.cast || [];
+        // Filtra filmes com poster válido e ordena por popularidade
+        movies = movies.filter(m => m.poster_path).sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+        res.json({ cast: movies });
     } catch (error) {
         console.warn('Aviso TMDB indisponível, usando fallback local:', error.message);
         res.json({ cast: fallbackMovies });
