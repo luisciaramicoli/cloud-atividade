@@ -416,6 +416,110 @@ button:hover {
   border: 1px solid #a7f3d0;
 }
 
+/* Audit Logs & Admin Controls */
+.admin-actions-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-admin-logs {
+  background-color: #059669;
+  color: white;
+  padding: 0.6rem 1rem;
+  font-size: 0.88rem;
+  border-radius: 6px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  width: auto;
+  transition: background-color 0.2s;
+}
+
+.btn-admin-logs:hover {
+  background-color: #047857;
+}
+
+.logs-card {
+  border-left-color: #059669;
+}
+
+.logs-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.btn-refresh-logs {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+  border-radius: 4px;
+  cursor: pointer;
+  width: auto;
+  font-weight: 600;
+}
+
+.btn-refresh-logs:hover {
+  background-color: #e5e7eb;
+}
+
+.logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.logs-table th,
+.logs-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.logs-table th {
+  background-color: #f9fafb;
+  color: #374151;
+  font-weight: 600;
+}
+
+.badge-status {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.badge-status-success {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.badge-status-denied {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.badge-status-error {
+  background-color: #ffedd5;
+  color: #c2410c;
+}
+
+.log-code-snippet {
+  font-family: monospace;
+  background-color: #f8fafc;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #334155;
+  word-break: break-all;
+}
+
 /* Responsiveness */
 @media (max-width: 600px) {
   .catalog-header {

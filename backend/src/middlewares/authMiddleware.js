@@ -36,6 +36,8 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+const { logFromReq } = require('../services/loggerService');
+
 // Padrão A: Centralized Enforcement - consulta o auth-service via rede interna
 const requireAdminCentralized = async (req, res, next) => {
     try {
@@ -49,9 +51,26 @@ const requireAdminCentralized = async (req, res, next) => {
             return next();
         }
 
+        logFromReq(req, {
+            type: 'audit.security.access_denied',
+            action: 'tentativa_negada_403',
+            status: 'denied',
+            target: { type: 'route', method: req.method, path: req.originalUrl },
+            metadata: { reason: 'Privilégios de administrador necessários', requiredRole: 'admin' },
+            immediate: true
+        });
+
         return res.status(403).json({ error: 'Acesso negado: privilégios de administrador necessários.' });
     } catch (error) {
         if (error.response && error.response.status === 403) {
+            logFromReq(req, {
+                type: 'audit.security.access_denied',
+                action: 'tentativa_negada_403',
+                status: 'denied',
+                target: { type: 'route', method: req.method, path: req.originalUrl },
+                metadata: { reason: 'Privilégios de administrador necessários', requiredRole: 'admin' },
+                immediate: true
+            });
             return res.status(403).json({ error: 'Acesso negado: privilégios de administrador necessários.' });
         }
         console.error('Erro ao consultar auth-service para autorização:', error.message);
@@ -59,5 +78,6 @@ const requireAdminCentralized = async (req, res, next) => {
     }
 };
 
-module.exports = { authenticateToken, requireAdminCentralized };
+module.exports = { authenticateToken, requireAdminCentralized, extractToken };
+
 

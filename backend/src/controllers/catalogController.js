@@ -1,5 +1,6 @@
 const axios = require('axios');
 const db = require('../config/db');
+const { logFromReq } = require('../services/loggerService');
 
 const fallbackMovies = [
     { id: 862, title: 'Toy Story', overview: 'Led by Woody, Andy\'s toys live happily in his room until Andy\'s birthday brings Buzz Lightyear onto the scene.', poster_path: '/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg' },
@@ -40,6 +41,14 @@ exports.addFavorite = async (req, res) => {
     const { tmdb_movie_id } = req.body;
     try {
         await db.execute('INSERT IGNORE INTO favoritos (usuario_id, tmdb_movie_id) VALUES (?, ?)', [req.userId, tmdb_movie_id]);
+        
+        logFromReq(req, {
+            type: 'audit.favorite.add',
+            action: 'favoritar',
+            status: 'success',
+            target: { type: 'movie', id: tmdb_movie_id }
+        });
+
         res.json({ message: 'Adicionado aos favoritos' });
     } catch (error) {
         res.status(500).json({ error: 'Erro no banco de dados' });
@@ -50,6 +59,14 @@ exports.removeFavorite = async (req, res) => {
     const { tmdb_movie_id } = req.params;
     try {
         await db.execute('DELETE FROM favoritos WHERE usuario_id = ? AND tmdb_movie_id = ?', [req.userId, tmdb_movie_id]);
+        
+        logFromReq(req, {
+            type: 'audit.favorite.remove',
+            action: 'desfavoritar',
+            status: 'success',
+            target: { type: 'movie', id: tmdb_movie_id }
+        });
+
         res.json({ message: 'Removido dos favoritos' });
     } catch (error) {
         res.status(500).json({ error: 'Erro no banco de dados' });
@@ -110,6 +127,15 @@ exports.addComment = async (req, res) => {
             'INSERT INTO comentarios (usuario_id, tmdb_movie_id, texto) VALUES (?, ?, ?)',
             [req.userId, tmdb_movie_id, texto]
         );
+
+        logFromReq(req, {
+            type: 'audit.comment.create',
+            action: 'comentar',
+            status: 'success',
+            target: { type: 'comment', id: result.insertId, tmdb_movie_id },
+            metadata: { texto_preview: texto.substring(0, 60) }
+        });
+
         res.status(201).json({ message: 'Comentário adicionado', id: result.insertId });
     } catch (error) {
         res.status(500).json({ error: 'Erro no banco de dados' });
@@ -129,6 +155,14 @@ exports.deleteComment = async (req, res) => {
         // Se o comentário pertence ao próprio usuário logado, pode apagar diretamente
         if (comment.usuario_id === req.userId) {
             await db.execute('DELETE FROM comentarios WHERE id = ?', [id]);
+
+            logFromReq(req, {
+                type: 'audit.comment.delete_own',
+                action: 'apagar_comentario_proprio',
+                status: 'success',
+                target: { type: 'comment', id: Number(id), tmdb_movie_id: comment.tmdb_movie_id }
+            });
+
             return res.json({ message: 'Comentário excluído com sucesso pelo autor' });
         }
 
@@ -143,10 +177,28 @@ exports.deleteComment = async (req, res) => {
 
             if (authResponse.data && authResponse.data.allowed) {
                 await db.execute('DELETE FROM comentarios WHERE id = ?', [id]);
+
+                logFromReq(req, {
+                    type: 'audit.comment.moderate',
+                    action: 'moderar_comentario',
+                    status: 'success',
+                    target: { type: 'comment', id: Number(id), author_id: comment.usuario_id, tmdb_movie_id: comment.tmdb_movie_id },
+                    metadata: { motivo: 'Moderação de comentário de terceiros por administrador' }
+                });
+
                 return res.json({ message: 'Comentário excluído com sucesso (Ação de Moderação/Admin)' });
             }
         } catch (authError) {
             if (authError.response && authError.response.status === 403) {
+                logFromReq(req, {
+                    type: 'audit.security.access_denied',
+                    action: 'tentativa_negada_403',
+                    status: 'denied',
+                    target: { type: 'comment', id: Number(id), author_id: comment.usuario_id },
+                    metadata: { motivo: 'Tentativa não autorizada de apagar comentário de outro usuário' },
+                    immediate: true
+                });
+
                 return res.status(403).json({
                     error: 'Acesso negado: apenas administradores podem apagar comentários de outros usuários.'
                 });
@@ -154,6 +206,15 @@ exports.deleteComment = async (req, res) => {
             console.error('Erro na chamada ao auth-service:', authError.message);
             return res.status(500).json({ error: 'Erro ao validar autorização centralizada' });
         }
+
+        logFromReq(req, {
+            type: 'audit.security.access_denied',
+            action: 'tentativa_negada_403',
+            status: 'denied',
+            target: { type: 'comment', id: Number(id), author_id: comment.usuario_id },
+            metadata: { motivo: 'Tentativa não autorizada de apagar comentário de outro usuário' },
+            immediate: true
+        });
 
         return res.status(403).json({
             error: 'Acesso negado: apenas administradores podem apagar comentários de outros usuários.'

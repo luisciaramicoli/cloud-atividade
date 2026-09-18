@@ -1,0 +1,24 @@
+{
+  "id": "e8b9c0d1-2345-6789-0abc-def123456789",
+  "name": "Cloud Atividade - Local",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8218",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "user_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OCwiZW1haWwiOiJ1c3VhcmlvQHRlc3RlLmNvbSIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzg5NzQ5ODQzLCJleHAiOjE3OTIzNDE4NDN9.evLiDO-_Ot30b-pB-ztXPjs1KmMVJE3BmkJ0EEVnSoE",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "admin_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NywiZW1haWwiOiJhZG1pbl9yYmFjQHRlc3RlLmNvbSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc4OTc0OTg0MywiZXhwIjoxNzkyMzQxODQzfQ.zrjxn7nm5Lo8fHmCALCnpxOrvrq7UbdOq8d95sE2xpM",
+      "type": "secret",
+      "enabled": true
+    }
+  ]
+}

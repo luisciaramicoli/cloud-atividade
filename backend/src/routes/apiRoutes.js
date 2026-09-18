@@ -13,8 +13,10 @@ router.get('/me', authenticateToken, authProxyController.me);
 router.post('/forgot-password', authProxyController.forgotPassword);
 router.post('/reset-password', authProxyController.resetPassword);
 
-// Admin Exclusive - List users (Centralized Enforcement via Auth Service)
+// Admin Exclusive - List users & Audit Logs (Centralized Enforcement via Auth Service)
 router.get('/users', authenticateToken, requireAdminCentralized, authProxyController.listUsers);
+router.get('/logs', authenticateToken, requireAdminCentralized, authProxyController.listLogs);
+
 
 // Catalog API (Protected)
 router.get('/movies', authenticateToken, catalogController.getMovies);

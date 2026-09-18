@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -14,8 +12,10 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_SERVICE_URL=http://auth:3000
+      - LOG_SERVICE_URL=http://log-service:3000
     depends_on:
       - auth
+      - log-service
     restart: always
 
   auth:
@@ -34,5 +34,30 @@ services:
       - SMTP_PASS=${SMTP_PASS}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8218}
       - PORT=3000
+      - LOG_SERVICE_URL=http://log-service:3000
+    depends_on:
+      - log-service
     restart: always
 
+  log-service:
+    build: ./log-service
+    # Sem porta exposta para fora (internal only)
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3000
+      - REDIS_STREAM_KEY=audit_events
+      - REDIS_STREAM_MAXLEN=50000
+    depends_on:
+      - redis
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_audit_data:/data
+    restart: always
+
+volumes:
+  redis_audit_data:

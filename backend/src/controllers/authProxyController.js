@@ -1,5 +1,10 @@
 const axios = require('axios');
+const jwt = require('jsonwebtoken');
+const { extractToken } = require('../middlewares/authMiddleware');
+const { logAuditEvent, extractIp } = require('../services/loggerService');
+
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
+const LOG_SERVICE_URL = process.env.LOG_SERVICE_URL || 'http://log-service:3000';
 
 exports.register = async (req, res) => {
     try {
@@ -27,6 +32,24 @@ exports.login = async (req, res) => {
         // O backend decide as permissões internamente; nenhuma role ou token é exposta ao front
         const canManageUsers = role === 'admin';
 
+        // Registro de Auditoria do Login
+        const decoded = jwt.decode(token);
+        logAuditEvent({
+            source: 'service.auth',
+            type: 'audit.auth.login',
+            trace_id: req.traceId,
+            actor: {
+                id: decoded?.id ? String(decoded.id) : null,
+                role: role || decoded?.role || 'user',
+                ip: extractIp(req),
+                user_agent: req.headers ? req.headers['user-agent'] : null
+            },
+            action: 'login',
+            status: 'success',
+            target: { type: 'session' },
+            metadata: { nome }
+        });
+
         res.status(response.status).json({
             message: response.data.message || 'Login sucesso',
             user: {
@@ -35,11 +58,51 @@ exports.login = async (req, res) => {
             }
         });
     } catch (error) {
+        // Registro de tentativa de login falha
+        logAuditEvent({
+            source: 'service.auth',
+            type: 'audit.auth.login_failed',
+            trace_id: req.traceId,
+            actor: {
+                id: null,
+                role: 'anonymous',
+                ip: extractIp(req),
+                user_agent: req.headers ? req.headers['user-agent'] : null
+            },
+            action: 'login_falhou',
+            status: 'denied',
+            target: { type: 'session' },
+            metadata: { email: req.body?.email },
+            immediate: true
+        });
+
         res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
     }
 };
 
 exports.logout = (req, res) => {
+    const token = extractToken(req);
+    let actor = { id: null, role: 'anonymous', ip: extractIp(req), user_agent: req.headers ? req.headers['user-agent'] : null };
+    if (token) {
+        try {
+            const decoded = jwt.decode(token);
+            if (decoded) {
+                actor.id = decoded.id ? String(decoded.id) : null;
+                actor.role = decoded.role || 'user';
+            }
+        } catch (_) {}
+    }
+
+    logAuditEvent({
+        source: 'service.auth',
+        type: 'audit.auth.logout',
+        trace_id: req.traceId,
+        actor,
+        action: 'logout',
+        status: 'success',
+        target: { type: 'session' }
+    });
+
     res.clearCookie('token', {
         httpOnly: true,
         sameSite: 'lax',
@@ -110,4 +173,18 @@ exports.listUsers = async (req, res) => {
         res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro de gateway' });
     }
 };
+
+exports.listLogs = async (req, res) => {
+    try {
+        const response = await axios.get(`${LOG_SERVICE_URL}/logs`, {
+            params: req.query,
+            timeout: 5000
+        });
+        res.status(response.status).json(response.data);
+    } catch (error) {
+        console.error('Erro ao consultar log-service:', error.message);
+        res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro ao consultar serviço de logs' });
+    }
+};
+
 

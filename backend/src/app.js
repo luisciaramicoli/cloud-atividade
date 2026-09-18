@@ -3,6 +3,8 @@ const cors = require('cors');
 const path = require('path');
 const apiRoutes = require('./routes/apiRoutes');
 
+const correlationMiddleware = require('./middlewares/correlationMiddleware');
+
 const app = express();
 
 app.use(cors({
@@ -10,6 +12,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(correlationMiddleware);
 
 // API Routes
 app.use('/api', apiRoutes);

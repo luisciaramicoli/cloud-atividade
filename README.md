@@ -11,6 +11,8 @@ Este repositório contém a implementação da atividade de Cloud, com Frontend 
 - Favoritar filmes (armazenados no MariaDB pessoal).
 - Comentar filmes (armazenados no MariaDB pessoal).
 - **NOVO (Atividade 4):** Controle de Acesso Baseado em Papéis (RBAC) com enforcement no backend e moderação de comentários.
+- **NOVO (Atividade 5):** Observabilidade & Logs de Auditoria — Microsserviço próprio (`log-service`) com Redis Streams, padrão CloudEvents v1.0, ECS e NIST SP 800-92.
+
 
 ## Atividade 4 · Controle de Acesso por Papel (RBAC de Verdade)
 
@@ -91,12 +93,224 @@ Se migrássemos para o **Padrão B (Claims no JWT)**:
 
 ---
 
+## Atividade 5 · Observabilidade: Logs e Auditoria com Redis Streams
+
+### 1. Arquitetura e Microsserviço Dedicado (`log-service`)
+
+O sistema foi evoluído para garantir rastreabilidade completa e imutabilidade das ações executadas pelos usuários (quem fez o quê, quando e de onde). Em vez de gravar logs em arquivos locais de cada container — o que causaria dispersão, concorrência em I/O de disco e risco de exclusão acidental —, toda a ingestão e consulta de auditoria foi centralizada em um microsserviço dedicado: o **`log-service`**, integrado com **Redis Streams**.
+
+```mermaid
+flowchart TD
+    subgraph Browser ["Navegador / Cliente"]
+        UI["Interface React SPA / Flashpost Client"]
+    end
+
+    subgraph InternalNetwork ["Rede Interna Docker (bridge)"]
+        subgraph AppGateway ["App / Catálogo (Porta 3000 -> 8218)"]
+            Controller["catalogController / authProxyController"]
+            BufferQueue["loggerService.js (Fila em Memória / Batching)"]
+        end
+
+        subgraph AuthService ["auth-service (Interno)"]
+            Auth["Auth Service / RBAC Centralizado"]
+        end
+
+        subgraph LogMicroservice ["log-service (Interno)"]
+            LogAPI["Log Controller (Express)"]
+        end
+
+        subgraph RedisCluster ["Redis 7 (AOF + Volume Persistente)"]
+            Stream["Stream: audit_events (MAXLEN ~ 50000)"]
+            DiskVolume[("Volume: redis_audit_data (/data/appendonly.aof)")]
+        end
+    end
+
+    UI -->|HTTP / REST| Controller
+    Controller -.->|RBAC Centralizado| Auth
+    Controller -->|Enfileira Evento Assíncrono| BufferQueue
+    BufferQueue -->|POST /logs/batch (a cada 500ms ou 10 itens)| LogAPI
+    BufferQueue -->|Flush Imediato em 403 Denied| LogAPI
+    LogAPI -->|XADD audit_events MAXLEN ~ 50000| Stream
+    Stream -.->|AOF Persistente| DiskVolume
+    Controller -->|GET /api/logs (Admin Only)| LogAPI
+    LogAPI -->|XREVRANGE audit_events + -| Stream
+```
+
+#### Decisões Arquiteturais e Isolamento
+- **Microsserviço Próprio (`log-service`):** Opera internamente na rede Docker sem portas expostas ao host (`ports` omitido no Docker Compose), prevenindo acesso externo não autorizado aos dados brutos de auditoria.
+- **Por que Redis Streams?**
+  - **Ordenação Temporal Estrita:** Cada evento na Stream recebe um ID cronológico gerado pelo Redis (`<millisecondsTime>-<sequenceNumber>`), garantindo sequência imutável de fatos.
+  - **Eficiência Extrema de Ingestão:** O comando `XADD` possui complexidade \(O(1)\) para inserção.
+  - **Controle de Volumetria Amortizado (`MAXLEN ~ 50000`):** O operador de aproximação `~` executa o corte de nós de macro-páginas (radix tree) do Redis de forma amortizada, eliminando pausas de thread do Redis causadas por trimming estrito.
+  - **Consultas Paginadas Decrescentes (`XREVRANGE`):** Permite leitura ultra rápida a partir dos eventos mais recentes até os mais antigos com paginação via cursor.
+- **Garantias de Persistência no Redis:**
+  - Configurado com **AOF (Append-Only File)** ativo: `redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction`.
+  - Política `noeviction` garante que eventos de auditoria e segurança **nunca sejam descartados silenciosamente por falta de memória**.
+  - Os dados são persistidos no volume Docker nomeado **`redis_audit_data`**, preservando o histórico de eventos mesmo após reinicializações completas dos containers.
+
+---
+
+### 2. Resiliência do Cliente Assíncrono (`backend/src/services/loggerService.js`)
+
+Para proteger os serviços produtores (`backend`/catálogo e `auth`) contra gargalos e vazamento de conexões, a integração não realiza disparos HTTP bloqueantes nem "fire-and-forget" ingênuo. O cliente foi estruturado com os seguintes pilares de confiabilidade:
+
+1. **Fila em Memória e Envio em Lote (Batching):** Os eventos são enfileirados em um buffer interno não-bloqueante e despachados em lotes para `POST /logs/batch` a cada **500 ms** ou assim que a fila atinge **10 eventos**.
+2. **Despacho Imediato para Segurança (Immediate Flush):** Eventos com status `denied` ou ação de segurança (`tentativa_negada_403`) recebem prioridade máxima, acionando o esvaziamento imediato (`setImmediate`) para que violações de segurança fiquem disponíveis instantaneamente para inspeção.
+3. **Retentativas Automáticas com Backoff Exponencial:** Caso o `log-service` esteja temporariamente indisponível durante uma reinicialização, o cliente reexecuta o envio do lote até 3 vezes com esperas exponenciais (200ms, 400ms, 800ms) antes de descartar.
+4. **Sanitização de Dados Sensíveis (LGPD / GDPR / NIST):** O método `sanitize()` remove ou redige automaticamente chaves sensíveis como senhas, hashes, secrets e tokens JWT (`[REDACTED]`), impedindo que credenciais vazem para a base de auditoria.
+5. **Rastreabilidade Distribuída (Correlation ID):** O middleware `correlationMiddleware.js` gera ou propaga um identificador único de rastreamento (`x-correlation-id`) via `crypto.randomUUID()`, anexado ao evento como `trace_id`.
+
+---
+
+### 3. Padrão Estrutural do Evento de Auditoria (CloudEvents v1.0 + ECS + NIST SP 800-92)
+
+Todos os eventos gravados na Stream seguem o padrão global aberto **CloudEvents v1.0**, complementado com a taxonomia do **Elastic Common Schema (ECS)** e as diretrizes do **NIST SP 800-92** (Computer Security Log Management):
+
+```json
+{
+  "stream_id": "1789749826217-0",
+  "specversion": "1.0",
+  "id": "1789749826215-98f7f626",
+  "source": "service.catalog",
+  "type": "audit.security.access_denied",
+  "time": "2026-09-18T16:43:46.215Z",
+  "trace_id": "6c5b6a68-0bfa-4d5e-b495-e7a0b152f0b0",
+  "actor": {
+    "id": "8",
+    "role": "user",
+    "ip": "127.0.0.1",
+    "user_agent": "axios/1.20.0"
+  },
+  "action": "tentativa_negada_403",
+  "status": "denied",
+  "target": {
+    "type": "comment",
+    "id": 202,
+    "author_id": 7
+  },
+  "metadata": {
+    "motivo": "Tentativa não autorizada de apagar comentário de outro usuário"
+  }
+}
+```
+
+#### Dicionário de Campos Obrigatórios:
+- **`specversion`**: Versão da especificação CloudEvents (`"1.0"`).
+- **`id`**: Identificador único global do evento de log.
+- **`source`**: Microsserviço originador do evento (`"service.catalog"`, `"service.auth"`).
+- **`type`**: Categoria taxonômica do evento (ex: `audit.auth.login`, `audit.security.access_denied`).
+- **`time`**: Carimbo de data/hora em formato UTC ISO-8601 estrito.
+- **`trace_id`**: Identificador único de correlação de ponta a ponta da requisição.
+- **`actor`**: Identidade completa do autor (`id`, `role`, `ip`, `user_agent`).
+- **`action`**: Nome semântico e objetivo da ação executada.
+- **`status`**: Resultado da operação (`"success"` ou `"denied"`).
+- **`target`**: Objeto de negócio impactado (`movie`, `comment`, `session`, `route`).
+- **`metadata`**: Contexto adicional sanitizado da operação.
+
+---
+
+### 4. Tabela de Eventos de Auditoria Monitorados
+
+| Evento de Auditoria | Origem | Ação Semântica (`action`) | Tipo CloudEvents | Status | Alvo (`target`) |
+|---|---|---|---|:---:|---|
+| **Login bem-sucedido** | `service.auth` | `login` | `audit.auth.login` | `success` | `{ "type": "session" }` |
+| **Login falho** | `service.auth` | `login_falhou` | `audit.auth.login_failed` | `denied` | `{ "type": "session" }` |
+| **Logout** | `service.auth` | `logout` | `audit.auth.logout` | `success` | `{ "type": "session" }` |
+| **Favoritar filme** | `service.catalog` | `favoritar` | `audit.favorite.add` | `success` | `{ "type": "movie", "id": 862 }` |
+| **Desfavoritar filme** | `service.catalog` | `desfavoritar` | `audit.favorite.remove` | `success` | `{ "type": "movie", "id": 862 }` |
+| **Adicionar comentário** | `service.catalog` | `comentar` | `audit.comment.create` | `success` | `{ "type": "comment", "id": <id> }` |
+| **Apagar próprio comentário** | `service.catalog` | `apagar_comentario_proprio` | `audit.comment.delete_own` | `success` | `{ "type": "comment", "id": <id> }` |
+| **Moderar comentário alheio** | `service.catalog` | `moderar_comentario` | `audit.comment.moderate` | `success` | `{ "type": "comment", "id": <id>, "author_id": <id> }` |
+| **Tentativa Negada (Moderação)** | `service.catalog` | `tentativa_negada_403` | `audit.security.access_denied` | `denied` | `{ "type": "comment", "id": <id>, "author_id": <id> }` |
+| **Tentativa Negada (Logs/Admin)**| `service.catalog` | `tentativa_negada_403` | `audit.security.access_denied` | `denied` | `{ "type": "route", "method": "GET", "path": "/api/logs" }` |
+
+---
+
+### 5. Endpoint de Consulta de Auditoria (`GET /api/logs`)
+
+O acesso à trilha de auditoria é rigorosamente protegido por RBAC com validação centralizada:
+- **Requisição por Usuário Comum:** Interceptada pelo middleware `requireAdminCentralized`. O servidor rejeita a chamada com **HTTP 403 Forbidden**, e **automaticamente registra um evento de tentativa negada (`tentativa_negada_403`) com prioridade imediata na Stream**.
+- **Requisição por Administrador:** O backend autoriza a solicitação e consulta o `log-service` via rede interna, consumindo os eventos através do comando Redis `XREVRANGE audit_events + - COUNT <limit>` com paginação por cursor decrescente.
+- **Painel Visual Integrado no Frontend:** O administrador possui o botão **`📜 Logs (Redis)`** no cabeçalho do catálogo, abrindo uma tabela interativa que exibe a trilha de auditoria em tempo real, com destaque para ações negadas (críticas) e identificadores de Stream.
+
+---
+
+### 6. Validação Prática e Sequência de Demonstração (Requisito da Atividade)
+
+A validação de ponta a ponta do pipeline de observabilidade foi executada através da sequência completa de ações reais:
+
+1. **Login de Usuário Comum (`usuario@teste.com`):** Sessão aberta e registrada como `audit.auth.login`.
+2. **Favoritar Filme 862 (Toy Story):** Gravado evento `audit.favorite.add`.
+3. **Publicar Comentário no Filme 862:** Gravado evento `audit.comment.create` (ID #201).
+4. **Tentativa Negada de Apagar Comentário Alheio:** Usuário comum tenta deletar comentário criado pelo Admin. O backend recusa com **403 Forbidden** e dispara imediatamente o evento `audit.security.access_denied` (`tentativa_negada_403`).
+5. **Tentativa Negada de Consultar Logs:** Usuário comum tenta acessar `GET /api/logs`. Recusado com **403 Forbidden** e registrado na auditoria.
+6. **Login de Administrador (`admin_rbac@teste.com`):** Sessão administrativa registrada.
+7. **Consulta de Logs pelo Administrador:** A chamada `GET /api/logs?limit=10` retorna com **200 OK** a trilha íntegra persistida na Stream do Redis.
+8. **Moderação de Comentário por Administrador:** O admin exclui o comentário do usuário comum, registrando o evento de moderação `audit.comment.moderate`.
+
+#### Evidência de Execução Real no Terminal / Redis:
+```text
+=== INICIANDO TESTE END-TO-END DE AUDITORIA & REDIS STREAMS ===
+
+[1] Login como Usuario Comum (usuario@teste.com)...
+Usuario Comum logado com sucesso! Cookie recebido.
+
+[2] Usuario Comum favoritando filme 862 (Toy Story)...
+Favorito adicionado: { message: 'Adicionado aos favoritos' }
+
+[3] Usuario Comum comentando no filme 862...
+Comentário criado com ID: 201
+
+[4] Tentativa Negada 403: Usuario Comum tentando apagar comentário que não é dele...
+Tentativa de apagar comentário de outro usuário retornou STATUS: 403 {
+  error: 'Acesso negado: apenas administradores podem apagar comentários de outros usuários.'
+}
+
+[5] Tentativa Negada 403: Usuario Comum tentando consultar /api/logs...
+Status retornado: 403 Mensagem: { error: 'Acesso negado: privilégios de administrador necessários.' }
+
+[6] Login como Admin (admin_rbac@teste.com)...
+Admin logado com sucesso!
+
+[7] Admin consultando /api/logs (Redis Streams)...
+Logs retornados com sucesso!
+Total de logs recebidos: 9
+Log #1: action=login status=success actor={"id":"7","role":"admin"} target={"type":"session"}
+Log #2: action=tentativa_negada_403 status=denied actor={"id":"8","role":"user"} target={"type":"route","method":"GET","path":"/api/logs"}
+Log #3: action=tentativa_negada_403 status=denied actor={"id":"8","role":"user"} target={"type":"comment","id":202,"author_id":7}
+Log #4: action=comentar status=success actor={"id":"8","role":"user"} target={"type":"comment","id":201,"tmdb_movie_id":862}
+Log #5: action=favoritar status=success actor={"id":"8","role":"user"} target={"type":"movie","id":862}
+
+[8] Admin moderando comentário 201 criado por Usuario Comum...
+Resultado moderação admin: {
+  message: 'Comentário excluído com sucesso (Ação de Moderação/Admin)'
+}
+```
+
+---
+
+### 7. Como Testar via Flashpost / Postman
+
+Importe a collection disponível na raiz do repositório:
+- **Collection:** [`cloud-atividade.flashpost_collection.json`](./cloud-atividade.flashpost_collection.json)
+- **Environment:** [`cloud-atividade.flashpost_environment.json`](./cloud-atividade.flashpost_environment.json)
+
+Execute as requisições na pasta **`⭐ 4. Observabilidade & Auditoria Redis (Atividade 5)`**:
+1. **`4.1 [ATV 5] Usuário Comum tenta consultar /api/logs`**: Confirma o retorno **`403 Forbidden`**.
+2. **`4.2 [ATV 5] Admin consulta Trilha de Auditoria /api/logs`**: Retorna **`200 OK`** com todos os eventos estruturados consumidos da Stream do Redis.
+3. **`4.3 [ATV 5] Admin consulta Logs com Paginação Cursor`**: Demonstra a navegação paginada decrescente utilizando o `cursor` do Redis Streams.
+
+---
+
 ## Tecnologias
 - **Frontend:** React, Vite, Axios, React Router.
 - **Backend (API Gateway / Catálogo):** Node.js, Express, mysql2.
-- **Microsserviço (Auth):** Node.js, Express, mysql2, bcrypt, jsonwebtoken, nodemailer.
-- **Banco de Dados:** MariaDB.
+- **Microsserviço de Autenticação (Auth):** Node.js, Express, mysql2, bcrypt, jsonwebtoken, nodemailer.
+- **Microsserviço de Auditoria (Log-Service):** Node.js, Express, ioredis.
+- **Banco de Dados Relacional:** MariaDB.
+- **Armazenamento de Eventos e Trilha de Auditoria:** Redis 7 (Redis Streams + AOF Persistente).
 - **Infraestrutura:** Docker, Docker Compose (Multistage build).
+
 
 ## Deploy
 Para rodar via Portainer, configure as variáveis na Stack:
