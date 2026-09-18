@@ -17,7 +17,8 @@ import {
   SlidersHorizontal,
   Clock,
   Sparkles,
-  Layers
+  Layers,
+  BookOpen
 } from 'lucide-react';
 
 export default function Catalog({ onLogout, currentUser }) {
@@ -176,6 +177,17 @@ export default function Catalog({ onLogout, currentUser }) {
                 </button>
               </div>
             )}
+
+            <a
+              href="/api-docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-nav-docs"
+              title="Documentação Interativa Swagger / OpenAPI"
+            >
+              <BookOpen size={16} />
+              <span>Swagger</span>
+            </a>
 
             <button onClick={onLogout} className="btn-nav-logout" title="Encerrar Sessão">
               <LogOut size={16} />

@@ -12,6 +12,7 @@ Este repositório contém a implementação da atividade de Cloud, com Frontend 
 - Comentar filmes (armazenados no MariaDB pessoal).
 - **NOVO (Atividade 4):** Controle de Acesso Baseado em Papéis (RBAC) com enforcement no backend e moderação de comentários.
 - **NOVO (Atividade 5):** Observabilidade & Logs de Auditoria — Microsserviço próprio (`log-service`) com Redis Streams, padrão CloudEvents v1.0, ECS e NIST SP 800-92.
+- **NOVO (Atividade Extra):** Documentação interativa das APIs com Swagger UI e especificação OpenAPI 3.0 para os 3 microsserviços (Catálogo, Auth e Logs).
 
 
 ## Atividade 4 · Controle de Acesso por Papel (RBAC de Verdade)
@@ -299,6 +300,65 @@ Execute as requisições na pasta **`⭐ 4. Observabilidade & Auditoria Redis (A
 1. **`4.1 [ATV 5] Usuário Comum tenta consultar /api/logs`**: Confirma o retorno **`403 Forbidden`**.
 2. **`4.2 [ATV 5] Admin consulta Trilha de Auditoria /api/logs`**: Retorna **`200 OK`** com todos os eventos estruturados consumidos da Stream do Redis.
 3. **`4.3 [ATV 5] Admin consulta Logs com Paginação Cursor`**: Demonstra a navegação paginada decrescente utilizando o `cursor` do Redis Streams.
+
+---
+
+## Atividade Extra · Documentando suas APIs com Swagger / OpenAPI
+
+### 1. Visão Geral da Especificação e Arquitetura
+
+Para tornar todos os contratos de API visíveis, padronizados e testáveis diretamente pelo navegador (sem necessidade de consultar o código-fonte), a plataforma CineCloud foi 100% documentada sob a especificação **OpenAPI 3.0.3**, integrando a interface interativa do **Swagger UI**:
+
+- **Interface Interativa do Swagger UI:** Disponível embutida no gateway da aplicação em [`http://localhost:8218/api-docs`](http://localhost:8218/api-docs) (alias: [`http://localhost:8218/apidocs`](http://localhost:8218/apidocs)).
+- **Especificação OpenAPI Pura:**
+  - Formato JSON: [`docs/openapi.json`](./docs/openapi.json) (ou endpoint `GET /api/openapi.json`).
+  - Formato YAML: [`docs/openapi.yaml`](./docs/openapi.yaml) pronto para importar no [editor.swagger.io](https://editor.swagger.io).
+- **Atalho no Frontend:** Botão **"Swagger"** adicionado no cabeçalho executivo da aplicação CineCloud, permitindo alternar instantaneamente entre a interface visual e a documentação técnica.
+
+---
+
+### 2. Microsserviços e Endpoints Documentados (14 Contratos)
+
+A especificação engloba os 3 microsserviços do ecossistema CineCloud (atendendo amplamente ao Requisito 1 de cobrir múltiplos serviços):
+
+| Microsserviço | Tag | Método | Endpoint | Descrição & Respostas Mapeadas |
+| :--- | :--- | :---: | :--- | :--- |
+| **Auth-Service** | Autenticação & Sessão | `POST` | `/api/register` | Registro de novos usuários com hash bcrypt (201, 400, 409). |
+| **Auth-Service** | Autenticação & Sessão | `POST` | `/api/login` | Autenticação, emissão de JWT e auditoria (200, 400, 401). |
+| **Auth-Service** | Autenticação & Sessão | `POST` | `/api/logout` | Encerramento de sessão e registro de auditoria (200). |
+| **Auth-Service** | Autenticação & Sessão | `GET` | `/api/me` | Consulta do usuário logado via Bearer JWT (200, 401). |
+| **Auth-Service** | Autenticação & Sessão | `POST` | `/api/forgot-password`| Disparo de token de recuperação via Mailtrap (200, 400). |
+| **Auth-Service** | Autenticação & Sessão | `POST` | `/api/reset-password` | Atualização de senha com validação de token (200, 400). |
+| **Auth-Service** | Administração & RBAC | `GET` | `/api/users` | Listagem de usuários restrita a administradores (200, 401, 403). |
+| **Catálogo** | Catálogo de Filmes | `GET` | `/api/movies` | Filmografia completa do Tom Hanks via TMDB (200, 401, 500). |
+| **Catálogo** | Favoritos | `GET` | `/api/favorites` | Lista de favoritos do usuário autenticado (200, 401). |
+| **Catálogo** | Favoritos | `POST` | `/api/favorites` | Adição de favorito com auditoria no Redis (201, 400, 409). |
+| **Catálogo** | Favoritos | `DELETE`| `/api/favorites/:id` | Remoção de favorito com auditoria no Redis (200, 404). |
+| **Catálogo** | Comentários & Moderação | `GET` | `/api/comments/:id` | Listagem de resenhas da comunidade por filme (200, 401). |
+| **Catálogo** | Comentários & Moderação | `POST` | `/api/comments` | Publicação de comentário com auditoria no Redis (201, 400). |
+| **Catálogo** | Comentários & Moderação | `DELETE`| `/api/comments/:id` | Exclusão pelo autor ou moderação exclusiva por Admin (200, 403, 404). |
+| **Log-Service** | Auditoria & Observabilidade | `GET` | `/api/logs` | Consulta decrescente da Stream do Redis com paginação cursor (200, 401, 403). |
+
+---
+
+### 3. Autenticação e "Try it out" no Swagger UI
+
+A especificação inclui o esquema de segurança padrão OpenAPI `components.securitySchemes.BearerAuth`, permitindo testar requisições autenticadas sem sair da página do Swagger:
+
+1. Acesse [`http://localhost:8218/api-docs`](http://localhost:8218/api-docs) no navegador.
+2. Expanda o endpoint **`POST /api/login`**, clique em **"Try it out"** e envie o payload de credenciais (ex: `admin_rbac@teste.com` / `123`).
+3. Copie o valor do token retornado no cabeçalho `Set-Cookie` ou no corpo da resposta.
+4. No topo do Swagger UI, clique no botão verde **"Authorize 🔓"**.
+5. Cole o token no campo de texto e clique em **Authorize**.
+6. Agora, todos os endpoints protegidos (`/api/movies`, `/api/favorites`, `/api/users`, `/api/logs`, etc.) podem ser executados diretamente com o botão **"Execute"**!
+
+---
+
+### 4. Demonstração Prática da Chamada Real (Requisito 4)
+
+Abaixo é demonstrada a execução em tempo real de uma chamada via "Try it out" no Swagger UI embutido na aplicação, com resposta real `200 OK` retornada pelo backend:
+
+![Swagger UI - Execução Real via Try it out](./docs/print-swagger-ui.png)
 
 ---
 

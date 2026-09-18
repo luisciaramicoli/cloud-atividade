@@ -14,6 +14,57 @@ app.use(cors({
 app.use(express.json());
 app.use(correlationMiddleware);
 
+// Swagger / OpenAPI documentation
+const openapiSpec = require('./docs/openapi.json');
+
+app.get('/api/openapi.json', (req, res) => {
+    res.json(openapiSpec);
+});
+
+const swaggerHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CineCloud API Docs - Swagger UI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5/favicon-32x32.png" sizes="32x32" />
+  <style>
+    html { box-sizing: border-box; overflow-y: scroll; }
+    *, *:before, *:after { box-sizing: inherit; }
+    body { margin: 0; background: #fafafa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .topbar { display: none !important; }
+    .swagger-ui .info { margin: 24px 0; }
+    .swagger-ui .info .title { font-size: 28px; color: #0f172a; }
+    .swagger-ui .btn.authorize { color: #2563eb; border-color: #2563eb; }
+    .swagger-ui .btn.authorize svg { fill: #2563eb; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      window.ui = SwaggerUIBundle({
+        url: "/api/openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: true
+      });
+    };
+  </script>
+</body>
+</html>`;
+
+app.get(['/api-docs', '/apidocs'], (req, res) => {
+    res.send(swaggerHtml);
+});
+
 // API Routes
 app.use('/api', apiRoutes);
 

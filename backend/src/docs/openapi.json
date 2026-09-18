@@ -1,0 +1,1134 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CineCloud API - Catálogo, Autenticação e Observabilidade",
+    "version": "1.0.0",
+    "description": "Especificação interativa OpenAPI 3.0 dos contratos de API do ecossistema CineCloud. Documenta os 3 microsserviços integrados da plataforma: **Catálogo & Interações** (Filmes, Favoritos, Comentários), **Serviço de Autenticação & RBAC** (Registro, Login, Recuperação de Senha e Controle de Acesso) e **Serviço de Observabilidade** (Trilha de Auditoria em Redis Streams).",
+    "contact": {
+      "name": "CineCloud Engineering Team",
+      "url": "https://github.com/luisciaramicoli/cloud-atividade"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Gateway CineCloud (Porta 8218)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticação & Sessão",
+      "description": "Rotas de registro, login, validação de token JWT e fluxo de recuperação de senha."
+    },
+    {
+      "name": "Catálogo de Filmes",
+      "description": "Consulta de filmes da filmografia do Tom Hanks consumidos via TMDB."
+    },
+    {
+      "name": "Favoritos",
+      "description": "Gerenciamento de filmes favoritos pelo usuário autenticado."
+    },
+    {
+      "name": "Comentários & Moderação",
+      "description": "Publicação, leitura e moderação de comentários (autor ou administrador)."
+    },
+    {
+      "name": "Administração & RBAC",
+      "description": "Gestão de papéis e listagem de usuários exclusiva para administradores."
+    },
+    {
+      "name": "Auditoria & Observabilidade",
+      "description": "Consulta dos eventos auditados armazenados em Redis Streams com Correlation ID."
+    }
+  ],
+  "paths": {
+    "/api/register": {
+      "post": {
+        "tags": ["Autenticação & Sessão"],
+        "summary": "Registrar novo usuário",
+        "description": "Cria um novo usuário na base centralizada com senha criptografada em bcrypt.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuário cadastrado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                },
+                "example": {
+                  "message": "Usuário registrado com sucesso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados inválidos ou campos obrigatórios ausentes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Todos os campos são obrigatórios"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email já cadastrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Email já cadastrado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": ["Autenticação & Sessão"],
+        "summary": "Autenticar usuário e obter JWT",
+        "description": "Autentica o usuário com email e senha, gerando um token JWT assinado contendo ID, nome, email e privilégios RBAC (`can_manage_users`). O evento é auditado no Redis.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Autenticação bem-sucedida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email e senha obrigatórios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Email e senha são obrigatórios"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciais inválidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Credenciais inválidas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "tags": ["Autenticação & Sessão"],
+        "summary": "Encerrar sessão do usuário",
+        "description": "Registra o encerramento da sessão ativa na trilha de auditoria.",
+        "responses": {
+          "200": {
+            "description": "Logout registrado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                },
+                "example": {
+                  "message": "Sessão encerrada com sucesso"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": ["Autenticação & Sessão"],
+        "summary": "Consultar dados da sessão atual",
+        "description": "Decodifica o token JWT fornecido no header `Authorization` e retorna os dados do usuário autenticado.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados do usuário autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token de autenticação ausente ou inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Token não fornecido"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/forgot-password": {
+      "post": {
+        "tags": ["Autenticação & Sessão"],
+        "summary": "Solicitar recuperação de senha",
+        "description": "Gera token de recuperação com tempo de expiração e envia email transacional via Mailtrap/SMTP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Instruções enviadas com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                },
+                "example": {
+                  "message": "Se o email estiver cadastrado, as instruções foram enviadas."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email obrigatório",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Email é obrigatório"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reset-password": {
+      "post": {
+        "tags": ["Autenticação & Sessão"],
+        "summary": "Redefinir senha com token",
+        "description": "Atualiza a senha do usuário caso o token de redefinição seja válido e não tenha expirado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Senha redefinida com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                },
+                "example": {
+                  "message": "Senha redefinida com sucesso."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Token inválido, expirado ou senha não informada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Token inválido ou expirado."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies": {
+      "get": {
+        "tags": ["Catálogo de Filmes"],
+        "summary": "Listar filmes da filmografia de Tom Hanks",
+        "description": "Retorna o catálogo completo de títulos (ordenados por popularidade) obtidos via integração com a API v3 do TMDB.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Filtro textual opcional por título ou sinopse",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de filmes retornada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Movie"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token não fornecido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/favorites": {
+      "get": {
+        "tags": ["Favoritos"],
+        "summary": "Listar filmes favoritos do usuário",
+        "description": "Retorna todos os filmes salvos como favoritos pelo usuário autenticado.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de favoritos retornada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Favorite"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token não fornecido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Favoritos"],
+        "summary": "Adicionar filme aos favoritos",
+        "description": "Salva um título na lista de favoritos do usuário logado. Gera evento de auditoria `favoritar_filme` no Redis.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFavoriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Filme adicionado aos favoritos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "Filme adicionado aos favoritos" },
+                    "id": { "type": "integer", "example": 42 }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados incompletos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "tmdb_movie_id é obrigatório"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Filme já está nos favoritos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Filme já está nos favoritos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/favorites/{tmdb_movie_id}": {
+      "delete": {
+        "tags": ["Favoritos"],
+        "summary": "Remover filme dos favoritos",
+        "description": "Exclui um filme previamente favoritado pelo usuário. Gera evento de auditoria `desfavoritar_filme` no Redis.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tmdb_movie_id",
+            "in": "path",
+            "required": true,
+            "description": "Identificador do filme no TMDB",
+            "schema": {
+              "type": "integer",
+              "example": 13
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filme desfavoritado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                },
+                "example": {
+                  "message": "Filme removido dos favoritos"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Favorito não encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Favorito não encontrado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/comments/{tmdb_movie_id}": {
+      "get": {
+        "tags": ["Comentários & Moderação"],
+        "summary": "Listar comentários de um filme",
+        "description": "Retorna todos os comentários postados pela comunidade para o filme especificado.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tmdb_movie_id",
+            "in": "path",
+            "required": true,
+            "description": "ID do filme no TMDB",
+            "schema": {
+              "type": "integer",
+              "example": 13
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de comentários retornada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Comment"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token não fornecido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/comments": {
+      "post": {
+        "tags": ["Comentários & Moderação"],
+        "summary": "Publicar novo comentário em um filme",
+        "description": "Registra uma nova resenha ou comentário associado ao usuário logado. Gera evento de auditoria `comentar_filme` no Redis Streams.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comentário publicado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "Comentário adicionado com sucesso" },
+                    "id": { "type": "integer", "example": 89 }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campos obrigatórios ausentes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "tmdb_movie_id e texto são obrigatórios"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/comments/{id}": {
+      "delete": {
+        "tags": ["Comentários & Moderação"],
+        "summary": "Excluir ou moderar comentário (RBAC)",
+        "description": "Permite que o **autor** do comentário o exclua, ou que um **administrador** (`can_manage_users = 1`) o modere. Tentativas não autorizadas disparam HTTP 403 Forbidden e registram evento `tentativa_negada_403` na auditoria.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Identificador interno do comentário",
+            "schema": {
+              "type": "integer",
+              "example": 89
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comentário excluído ou moderado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                },
+                "example": {
+                  "message": "Comentário excluído com sucesso (moderação realizada)"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acesso negado: apenas o autor ou administradores podem moderar este comentário",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Acesso negado: apenas o autor ou administradores podem excluir este comentário."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Comentário não encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Comentário não encontrado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": ["Administração & RBAC"],
+        "summary": "Listar todos os usuários (Admin Only)",
+        "description": "Recurso restrito a administradores. A autorização é checada centralizadamente via chamada interna ao `auth-service` (`POST /authorize`).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de usuários cadastrados com seus respectivos privilégios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token não fornecido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acesso negado (usuário comum tentando acessar painel admin)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Acesso negado. Recurso exclusivo para administradores."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs": {
+      "get": {
+        "tags": ["Auditoria & Observabilidade"],
+        "summary": "Consultar trilha de auditoria do Redis Streams (Admin Only)",
+        "description": "Recurso restrito a administradores. Recupera os eventos estruturados gravados na stream `audit_events` do Redis (login, logout, comentários, moderações, tentativas 403) com metadados de rede e Correlation ID.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Quantidade máxima de registros a retornar (padrão: 50, máx: 500)",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "example": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de eventos de auditoria recuperada do Redis Streams",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token não fornecido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Acesso negado (não administrador)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Insira o token JWT retornado pelo endpoint `/api/login` no formato: `Bearer <token>` ou apenas `<token>`."
+      }
+    },
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["nome", "email", "senha"],
+        "properties": {
+          "nome": {
+            "type": "string",
+            "example": "Tom Hanks Fan"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "usuario@cinecloud.com"
+          },
+          "senha": {
+            "type": "string",
+            "format": "password",
+            "example": "senha123"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "admin_rbac@teste.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "Senha do usuário (aceita tanto 'password' quanto 'senha')",
+            "example": "123"
+          },
+          "senha": {
+            "type": "string",
+            "format": "password",
+            "description": "Alias para o campo password",
+            "example": "123"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Login sucesso"
+          },
+          "token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "integer", "example": 7 },
+              "nome": { "type": "string", "example": "Admin Geral" },
+              "can_manage_users": { "type": "boolean", "example": true }
+            }
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nome": {
+            "type": "string",
+            "example": "Administrador Geral"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "admin@cinecloud.com"
+          },
+          "can_manage_users": {
+            "type": "integer",
+            "enum": [0, 1],
+            "description": "1 para Administrador, 0 para Usuário regular",
+            "example": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-09-18T12:00:00.000Z"
+          }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "usuario@cinecloud.com"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["token", "newPassword"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "example": "a8fbc923e145b0..."
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "example": "novaSenhaSegura456"
+          }
+        }
+      },
+      "Movie": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 13
+          },
+          "title": {
+            "type": "string",
+            "example": "Forrest Gump"
+          },
+          "overview": {
+            "type": "string",
+            "example": "A man with a low IQ has accomplished great things in his life..."
+          },
+          "poster_path": {
+            "type": "string",
+            "nullable": true,
+            "example": "/arw2VCBveWOVZr6pxd9XTd1TdQa.jpg"
+          },
+          "release_date": {
+            "type": "string",
+            "example": "1994-06-23"
+          },
+          "vote_average": {
+            "type": "number",
+            "format": "float",
+            "example": 8.5
+          }
+        }
+      },
+      "Favorite": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 5
+          },
+          "user_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "tmdb_movie_id": {
+            "type": "integer",
+            "example": 13
+          },
+          "titulo": {
+            "type": "string",
+            "example": "Forrest Gump"
+          },
+          "poster_path": {
+            "type": "string",
+            "nullable": true,
+            "example": "/arw2VCBveWOVZr6pxd9XTd1TdQa.jpg"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-09-18T14:00:00.000Z"
+          }
+        }
+      },
+      "AddFavoriteRequest": {
+        "type": "object",
+        "required": ["tmdb_movie_id"],
+        "properties": {
+          "tmdb_movie_id": {
+            "type": "integer",
+            "example": 13
+          },
+          "titulo": {
+            "type": "string",
+            "example": "Forrest Gump"
+          },
+          "poster_path": {
+            "type": "string",
+            "example": "/arw2VCBveWOVZr6pxd9XTd1TdQa.jpg"
+          }
+        }
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 101
+          },
+          "user_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "tmdb_movie_id": {
+            "type": "integer",
+            "example": 13
+          },
+          "texto": {
+            "type": "string",
+            "example": "Uma obra-prima absoluta da carreira de Tom Hanks!"
+          },
+          "autor_nome": {
+            "type": "string",
+            "example": "Admin Geral"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-09-18T14:10:00.000Z"
+          }
+        }
+      },
+      "AddCommentRequest": {
+        "type": "object",
+        "required": ["tmdb_movie_id", "texto"],
+        "properties": {
+          "tmdb_movie_id": {
+            "type": "integer",
+            "example": 13
+          },
+          "texto": {
+            "type": "string",
+            "example": "Excelente atuação de Tom Hanks neste clássico."
+          }
+        }
+      },
+      "AuditLog": {
+        "type": "object",
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "example": "1789752503772-0"
+          },
+          "specversion": {
+            "type": "string",
+            "example": "1.0"
+          },
+          "id": {
+            "type": "string",
+            "example": "1789752503711-779cb0da"
+          },
+          "source": {
+            "type": "string",
+            "example": "service.auth"
+          },
+          "type": {
+            "type": "string",
+            "example": "audit.auth.login"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-09-18T17:28:23.711Z"
+          },
+          "trace_id": {
+            "type": "string",
+            "example": "1a7bb439-219c-4ddd-907a-c6063355003f"
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "nullable": true, "example": "7" },
+              "role": { "type": "string", "example": "admin" },
+              "ip": { "type": "string", "example": "127.0.0.1" },
+              "user_agent": { "type": "string", "example": "Mozilla/5.0..." }
+            }
+          },
+          "action": {
+            "type": "string",
+            "example": "login"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["success", "denied", "error"],
+            "example": "success"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "example": "session" }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "example": {
+              "nome": "Admin Geral"
+            }
+          }
+        }
+      },
+      "AuditLogsResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "example": 45
+          },
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditLog"
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Mensagem detalhada descrevendo o erro ocorrido"
+          }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Operação realizada com sucesso"
+          }
+        }
+      }
+    }
+  }
+}

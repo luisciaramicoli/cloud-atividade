@@ -295,6 +295,35 @@ button:hover {
   color: #059669;
 }
 
+.btn-nav-docs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: var(--shadow-subtle);
+}
+
+.btn-nav-docs:hover {
+  background-color: var(--bg-canvas);
+  border-color: var(--border-medium);
+  color: var(--brand-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-nav-docs svg {
+  color: #0284c7;
+}
+
 .btn-nav-logout {
   display: inline-flex;
   align-items: center;
