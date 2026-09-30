@@ -31,6 +31,7 @@ export default function Catalog({ onLogout, currentUser }) {
   const [filterMode, setFilterMode] = useState('all'); // 'all' | 'favorites'
   const [error, setError] = useState('');
   const [loadingMovies, setLoadingMovies] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState(null);
 
   // Modais de Admin
   const [activeModal, setActiveModal] = useState(null); // 'users' | 'logs' | null
@@ -43,7 +44,18 @@ export default function Catalog({ onLogout, currentUser }) {
   useEffect(() => {
     fetchMovies();
     fetchFavorites();
+    fetchAvatar();
   }, []);
+
+  // A foto fica no MinIO; o catálogo só precisa da URL devolvida pelo perfil. Se falhar, mostra o ícone padrão.
+  const fetchAvatar = async () => {
+    try {
+      const res = await api.get('profile');
+      setAvatarUrl(res.data.avatarUrl || null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchMovies = async () => {
     setLoadingMovies(true);
@@ -155,6 +167,13 @@ export default function Catalog({ onLogout, currentUser }) {
 
             <div className="user-identity-bar">
               <div className="user-profile-chip">
+                <Link to="/profile" className="user-avatar-small" title="Meu Perfil">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={`Foto de ${currentUser?.nome || 'perfil'}`} />
+                  ) : (
+                    <UserCircle size={20} />
+                  )}
+                </Link>
                 <span className="user-name">{currentUser?.nome || 'Usuário'}</span>
                 <span className={`role-pill ${currentUser?.can_manage_users ? 'role-admin' : 'role-user'}`}>
                   {currentUser?.can_manage_users ? (
