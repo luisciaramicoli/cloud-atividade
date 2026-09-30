@@ -92,6 +92,7 @@ services:
     restart: always
 
   minio:
+    image: ghcr.io/${GHCR_OWNER:-luisciaramicoli}/cinecloud-minio:${IMAGE_TAG:-latest}
     build: ./minio
     # imagem oficial descontinuada pela MinIO Inc. em 2025 (ver minio/Dockerfile): compilamos do código-fonte.
     # Sem porta exposta para fora (internal only): o app.js serve as fotos via proxy em /storage,
