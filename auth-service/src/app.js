@@ -1,12 +1,12 @@
 const express = require('express');
-const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
 const pool = require('./config/db');
 const { metricsCollector, metricsEndpoint } = require('./middlewares/metricsMiddleware');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+// Serviço interno (sem porta publicada): sem CORS. Quem chama é o gateway, via rede do Docker.
+app.use(express.json({ limit: '50kb' }));
 app.use(metricsCollector);
 
 // Healthcheck com Readiness Real (testa conexão ativa com o MariaDB)
@@ -30,7 +30,6 @@ app.get('/health', async (req, res) => {
       checks: {
         database: 'disconnected'
       },
-      error: err.message,
       timestamp: new Date().toISOString()
     });
   }

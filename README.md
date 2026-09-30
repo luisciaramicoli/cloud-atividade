@@ -916,6 +916,29 @@ Todas as execuções do pipeline (com status verde para CI e CD) podem ser audit
 
 ---
 
+## Segurança
+
+Revisão completa de segurança aplicada ao projeto. A tabela completa (20 itens, com gravidade) e os riscos residuais estão em [docs/seguranca.md](docs/seguranca.md).
+
+| Área | O que foi feito |
+|---|---|
+| **Autenticação** | JWT fixado em HS256, expira em 2 h, vai em cookie `HttpOnly` + `SameSite=Lax` (`Secure` com `COOKIE_SECURE=true`). `JWT_SECRET` é obrigatório (mínimo 16 caracteres) e não existe segredo padrão em produção. |
+| **Senhas** | bcrypt com 12 rounds, tamanho de 8 a 72 bytes. Login com resposta única ("E-mail ou senha incorretos") e custo constante, sem revelar se o e-mail existe. |
+| **Recuperação de senha** | Token aleatório de 256 bits guardado como SHA-256, validade de 30 min, uso único, links anteriores invalidados. A resposta é igual exista o e-mail ou não. |
+| **Autorização** | Papel checado no servidor (auth-service), nunca no front. O dono do perfil vem do JWT, e não do `:id` da URL. `/grafana` exige administrador. |
+| **Serviços internos** | auth-service e log-service não têm porta publicada e exigem o header `x-internal-token` (derivado do `JWT_SECRET`), que só o gateway envia. |
+| **Força bruta / abuso** | Limite por IP: 20 tentativas/15 min em login, cadastro e reset; 5/hora em recuperação; 300/min na API (HTTP 429). |
+| **CSRF / CORS** | CORS desligado por padrão (mesma origem); só libera o que estiver em `CORS_ORIGINS`. Requisições que alteram estado com `Origin` de outro site recebem 403. |
+| **Cabeçalhos HTTP** | CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP e HSTS. |
+| **Upload** | Limite de 3 MB, só JPEG/PNG/WEBP/GIF, conferência da assinatura real do arquivo (não confia no `Content-Type`), nomes gerados pelo servidor, download com `nosniff` e CSP `sandbox`. |
+| **Entradas** | Tipos validados, IDs só inteiros positivos, limites de tamanho em nome, bio e comentários; consultas SQL sempre parametrizadas. |
+| **Observabilidade** | Prometheus e Grafana só em `127.0.0.1`; `/metrics` só para a rede interna; Grafana sem papel anônimo de admin. IP dos logs vem de `req.ip` (não forjável), e segredos são mascarados. |
+| **Containers e CI** | Imagens rodando como `node` (sem root); permissão `packages: write` apenas no job de publicação; webhook do Portainer guardado como secret. |
+
+Variáveis de segurança da stack: `JWT_SECRET` (obrigatória), `GRAFANA_ADMIN_PASSWORD` (obrigatória), `COOKIE_SECURE`, `TRUST_PROXY` e `CORS_ORIGINS` (opcionais). Testes: `backend/tests/security.test.js`.
+
+---
+
 ## Tecnologias
 - **Frontend:** React, Vite, Axios, React Router.
 - **Backend (API Gateway / Catálogo):** Node.js, Express, mysql2.
@@ -932,7 +955,9 @@ Todas as execuções do pipeline (com status verde para CI e CD) podem ser audit
 Para rodar via Portainer, configure as variáveis na Stack:
 - `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`
 - `TMDB_API_KEY`
-- `JWT_SECRET`
+- `JWT_SECRET` (obrigatório, mínimo 16 caracteres — `openssl rand -hex 32`)
+- `GRAFANA_ADMIN_PASSWORD` (obrigatório)
+- `COOKIE_SECURE=true` (se o site for HTTPS), `TRUST_PROXY=1` (se houver proxy reverso), `CORS_ORIGINS` (opcional)
 - `SMTP_USER`, `SMTP_PASS` (Mailtrap)
 - `PUBLIC_URL` (URL pública para os links de reset de senha)
 - `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` (credenciais do object storage — Atividade 6)

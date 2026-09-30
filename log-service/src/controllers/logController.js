@@ -45,6 +45,12 @@ exports.createLog = async (req, res) => {
       events = [body];
     }
 
+    const MAX_EVENTS = 100;
+    if (events.length > MAX_EVENTS) {
+      return res.status(413).json({ error: `Máximo de ${MAX_EVENTS} eventos por requisição` });
+    }
+    events = events.filter(e => e && typeof e === 'object' && !Array.isArray(e));
+
     if (events.length === 0) {
       return res.status(400).json({ error: 'Nenhum evento fornecido no corpo da requisição' });
     }
@@ -172,7 +178,6 @@ exports.healthCheck = async (req, res) => {
       checks: {
         redis: 'disconnected'
       },
-      error: error.message,
       timestamp: new Date().toISOString()
     });
   }

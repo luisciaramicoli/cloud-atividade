@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   # =========================================================================
@@ -18,6 +17,12 @@ jobs:
   ci:
     name: "CI · Testes & Validação de Build"
     runs-on: ubuntu-latest
+    # Valores fictícios só para o compose conseguir interpolar as variáveis obrigatórias no build/teste
+    env:
+      JWT_SECRET: ci_super_secret_jwt_key_12345
+      MINIO_ROOT_USER: ci_minio_user
+      MINIO_ROOT_PASSWORD: ci_minio_password_123
+      GRAFANA_ADMIN_PASSWORD: ci_grafana_password_123
 
     steps:
       - name: Checkout do Repositório
@@ -65,7 +70,6 @@ jobs:
           DB_PASSWORD: ci_test_password
           DB_NAME: ci_cinecloud
           TMDB_API_KEY: ci_tmdb_dummy_key
-          JWT_SECRET: ci_super_secret_jwt_key_12345
         run: |
           echo "::group::Smoke Integration Test"
           # Sobe dependências e serviços de observabilidade
@@ -100,6 +104,9 @@ jobs:
     needs: [ci]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout do Repositório
@@ -192,15 +199,15 @@ jobs:
     needs: [cd]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    env:
+      PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
 
     steps:
       - name: Acionar Webhook do Portainer (Se Configurado)
         if: env.PORTAINER_WEBHOOK_URL != ''
-        env:
-          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
         run: |
           echo "Disparando Webhook de Auto-Update no Portainer..."
-          curl -X POST "$PORTAINER_WEBHOOK_URL"
+          curl -fsS -X POST "$PORTAINER_WEBHOOK_URL" > /dev/null
           echo "Webhook disparado com sucesso!"
 
       - name: Conclusão do Pipeline

@@ -42,7 +42,10 @@ export default function ResetPassword() {
           <form onSubmit={handleSubmit}>
             <input
               type="password"
-              placeholder="Digite a nova senha"
+              placeholder="Digite a nova senha (mínimo 8 caracteres)"
+              minLength={8}
+              maxLength={72}
+              autoComplete="new-password"
               value={novaSenha}
               onChange={(e) => setNovaSenha(e.target.value)}
               required

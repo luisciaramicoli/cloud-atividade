@@ -2,7 +2,8 @@ FROM node:20
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
-COPY . .
+COPY --chown=node:node . .
+USER node
 EXPOSE 3000
 CMD ["node", "src/server.js"]
 

@@ -1,4 +1,4 @@
-const axios = require('axios');
+const { internalClient: axios } = require('../config/authClient');
 const crypto = require('crypto');
 
 const LOG_SERVICE_URL = process.env.LOG_SERVICE_URL || 'http://log-service:3000';
@@ -35,11 +35,9 @@ function sanitize(data) {
  */
 function extractIp(req) {
   if (!req) return '127.0.0.1';
-  const forwarded = req.headers && req.headers['x-forwarded-for'];
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  return req.socket?.remoteAddress || req.ip || '127.0.0.1';
+  // req.ip só confia em X-Forwarded-For quando TRUST_PROXY está configurado; caso contrário o cliente
+  // poderia forjar qualquer IP nos logs de auditoria.
+  return req.ip || req.socket?.remoteAddress || '127.0.0.1';
 }
 
 /**

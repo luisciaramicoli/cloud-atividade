@@ -29,9 +29,14 @@ async function removeAvatar(key) {
 // Serve o objeto através do backend (mesma origem, sem expor a porta do MinIO no host compartilhado).
 async function streamAvatar(key, res) {
   const stat = await client.statObject(BUCKET, key);
-  res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream');
+  // Só serve tipos de imagem conhecidos; qualquer outra coisa sai como octet-stream + nosniff, nunca executável no navegador.
+  const storedType = stat.metaData?.['content-type'];
+  res.setHeader('Content-Type', Object.keys(EXT_BY_MIME).includes(storedType) ? storedType : 'application/octet-stream');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
   res.setHeader('Cache-Control', 'public, max-age=86400');
   const stream = await client.getObject(BUCKET, key);
+  stream.on('error', () => res.destroy());
   stream.pipe(res);
 }
 

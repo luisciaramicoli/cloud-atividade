@@ -1,12 +1,12 @@
 const express = require('express');
-const cors = require('cors');
 const logRoutes = require('./routes/logRoutes');
 const { metricsCollector, metricsEndpoint } = require('./middlewares/metricsMiddleware');
 
 const app = express();
 
-app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.disable('x-powered-by');
+// Serviço interno (sem porta publicada): sem CORS.
+app.use(express.json({ limit: '1mb' }));
 app.use(metricsCollector);
 
 // Endpoint de Métricas para Prometheus

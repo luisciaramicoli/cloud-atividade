@@ -1,8 +1,16 @@
 const axios = require('axios');
+const { internalClient } = require('../config/authClient');
 const db = require('../config/db');
 const { logFromReq } = require('../services/loggerService');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const COMMENT_MAX_LEN = 1000;
+
+// IDs chegam como texto na URL/corpo; só aceitamos inteiros positivos (evita valores inesperados no banco e nos logs).
+const toPositiveInt = (v) => {
+    const n = typeof v === 'number' ? v : (typeof v === 'string' && /^\d{1,10}$/.test(v) ? Number(v) : NaN);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+};
 
 const fallbackMovies = [
     { id: 862, title: 'Toy Story', overview: 'Led by Woody, Andy\'s toys live happily in his room until Andy\'s birthday brings Buzz Lightyear onto the scene.', poster_path: '/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg' },
@@ -17,12 +25,12 @@ exports.getMovies = async (req, res) => {
         if (!TMDB_API_KEY || TMDB_API_KEY === 'dummy') {
             return res.json({ cast: fallbackMovies });
         }
-        const personResponse = await axios.get(`https://api.themoviedb.org/3/search/person?query=Tom+Hanks&api_key=${TMDB_API_KEY}`);
+        const personResponse = await axios.get('https://api.themoviedb.org/3/search/person', { params: { query: 'Tom Hanks', api_key: TMDB_API_KEY }, timeout: 8000 });
         if (!personResponse.data.results || personResponse.data.results.length === 0) {
             return res.json({ cast: fallbackMovies });
         }
         const personId = personResponse.data.results[0].id;
-        const moviesResponse = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits?api_key=${TMDB_API_KEY}`);
+        const moviesResponse = await axios.get(`https://api.themoviedb.org/3/person/${encodeURIComponent(personId)}/movie_credits`, { params: { api_key: TMDB_API_KEY }, timeout: 8000 });
         
         let movies = moviesResponse.data.cast || [];
         // Filtra filmes com poster válido e ordena por popularidade
@@ -45,7 +53,8 @@ exports.getFavorites = async (req, res) => {
 };
 
 exports.addFavorite = async (req, res) => {
-    const { tmdb_movie_id } = req.body;
+    const tmdb_movie_id = toPositiveInt(req.body.tmdb_movie_id);
+    if (!tmdb_movie_id) return res.status(400).json({ error: 'tmdb_movie_id inválido' });
     try {
         await db.execute('INSERT IGNORE INTO favoritos (usuario_id, tmdb_movie_id) VALUES (?, ?)', [req.userId, tmdb_movie_id]);
         
@@ -63,7 +72,8 @@ exports.addFavorite = async (req, res) => {
 };
 
 exports.removeFavorite = async (req, res) => {
-    const { tmdb_movie_id } = req.params;
+    const tmdb_movie_id = toPositiveInt(req.params.tmdb_movie_id);
+    if (!tmdb_movie_id) return res.status(400).json({ error: 'tmdb_movie_id inválido' });
     try {
         await db.execute('DELETE FROM favoritos WHERE usuario_id = ? AND tmdb_movie_id = ?', [req.userId, tmdb_movie_id]);
         
@@ -83,12 +93,13 @@ exports.removeFavorite = async (req, res) => {
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
 
 exports.getComments = async (req, res) => {
-    const { tmdb_movie_id } = req.params;
+    const tmdb_movie_id = toPositiveInt(req.params.tmdb_movie_id);
+    if (!tmdb_movie_id) return res.status(400).json({ error: 'tmdb_movie_id inválido' });
     try {
         // Validação centralizada: verificar se o usuário autenticado possui privilégio de moderação
         let isAdmin = false;
         try {
-            const authResponse = await axios.post(`${AUTH_SERVICE_URL}/authorize`, {
+            const authResponse = await internalClient.post(`${AUTH_SERVICE_URL}/authorize`, {
                 userId: req.userId,
                 requiredRole: 'admin',
                 action: 'comments_view'
@@ -125,9 +136,12 @@ exports.getComments = async (req, res) => {
 };
 
 exports.addComment = async (req, res) => {
-    const { tmdb_movie_id, texto } = req.body;
+    const tmdb_movie_id = toPositiveInt(req.body.tmdb_movie_id);
+    const texto = typeof req.body.texto === 'string' ? req.body.texto.trim() : '';
 
+    if (!tmdb_movie_id) return res.status(400).json({ error: 'tmdb_movie_id inválido' });
     if (!texto) return res.status(400).json({ error: 'Texto é obrigatório' });
+    if (texto.length > COMMENT_MAX_LEN) return res.status(400).json({ error: `Comentário deve ter no máximo ${COMMENT_MAX_LEN} caracteres` });
 
     try {
         const [result] = await db.execute(
@@ -150,7 +164,8 @@ exports.addComment = async (req, res) => {
 };
 
 exports.deleteComment = async (req, res) => {
-    const { id } = req.params;
+    const id = toPositiveInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID inválido' });
     try {
         const [comments] = await db.execute('SELECT * FROM comentarios WHERE id = ?', [id]);
         if (comments.length === 0) {
@@ -176,7 +191,7 @@ exports.deleteComment = async (req, res) => {
         // Se pertence a outro usuário, trata-se de moderação: EXIGE ADMIN
         // PADRÃO A: Centralized Enforcement - o catálogo consulta o auth-service via chamada de rede interna
         try {
-            const authResponse = await axios.post(`${AUTH_SERVICE_URL}/authorize`, {
+            const authResponse = await internalClient.post(`${AUTH_SERVICE_URL}/authorize`, {
                 userId: req.userId,
                 requiredRole: 'admin',
                 action: 'delete_other_comment'

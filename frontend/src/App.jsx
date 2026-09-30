@@ -59,7 +59,10 @@ function AuthForm({ onLoginSuccess }) {
           />
           <input
             type="password"
-            placeholder="Senha"
+            placeholder={isLogin ? 'Senha' : 'Senha (mínimo 8 caracteres)'}
+            minLength={isLogin ? undefined : 8}
+            maxLength={isLogin ? undefined : 72}
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required

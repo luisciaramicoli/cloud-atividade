@@ -1,4 +1,4 @@
-const axios = require('axios');
+const { internalClient: axios } = require('../config/authClient');
 const jwt = require('jsonwebtoken');
 const { extractToken } = require('../middlewares/authMiddleware');
 const { logAuditEvent, extractIp } = require('../services/loggerService');
@@ -23,7 +23,7 @@ exports.login = async (req, res) => {
         // Armazenamento de credencial exclusivamente no backend via cookie HttpOnly
         res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: process.env.COOKIE_SECURE === 'true',
             sameSite: 'lax',
             path: '/',
             maxAge: 2 * 60 * 60 * 1000 // 2 horas
@@ -73,7 +73,7 @@ exports.login = async (req, res) => {
             action: 'login_falhou',
             status: 'denied',
             target: { type: 'session' },
-            metadata: { email: req.body?.email },
+            metadata: { email: typeof req.body?.email === 'string' ? req.body.email.slice(0, 150) : null },
             immediate: true
         });
 
@@ -106,6 +106,7 @@ exports.logout = (req, res) => {
 
     res.clearCookie('token', {
         httpOnly: true,
+        secure: process.env.COOKIE_SECURE === 'true',
         sameSite: 'lax',
         path: '/'
     });
@@ -178,10 +179,11 @@ exports.listUsers = async (req, res) => {
 
 exports.listLogs = async (req, res) => {
     try {
-        const response = await axios.get(`${LOG_SERVICE_URL}/logs`, {
-            params: req.query,
-            timeout: 5000
-        });
+        // Repassa só parâmetros conhecidos, já validados como texto
+        const params = {};
+        if (req.query.limit !== undefined) params.limit = String(req.query.limit);
+        if (req.query.cursor !== undefined) params.cursor = String(req.query.cursor);
+        const response = await axios.get(`${LOG_SERVICE_URL}/logs`, { params, timeout: 5000 });
         res.status(response.status).json(response.data);
     } catch (error) {
         console.error('Erro ao consultar log-service:', error.message);

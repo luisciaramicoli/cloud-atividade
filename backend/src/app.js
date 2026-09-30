@@ -7,16 +7,29 @@ const pool = require('./config/db');
 const profileController = require('./controllers/profileController');
 const correlationMiddleware = require('./middlewares/correlationMiddleware');
 const { metricsCollector, metricsEndpoint } = require('./middlewares/metricsMiddleware');
+const { authenticateToken, requireAdminCentralized } = require('./middlewares/authMiddleware');
+const { securityHeaders, originCheck, rateLimit, internalOnly } = require('./middlewares/securityMiddleware');
 
 const app = express();
 
-app.use(cors({
-    origin: true,
-    credentials: true
-}));
+// Atrás de um proxy reverso (Portainer/Traefik/Nginx), defina TRUST_PROXY=1 para que req.ip seja o IP real do cliente.
+if (process.env.TRUST_PROXY) {
+    app.set('trust proxy', /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY);
+}
+app.disable('x-powered-by');
+app.use(securityHeaders);
 
-// Proxy reverso para Grafana (permite acesso pela mesma porta 8218 sem expor 3001)
-app.use('/grafana', (req, res) => {
+// O frontend é servido pela mesma origem, então CORS fica desligado por padrão. Só libera as origens listadas em
+// CORS_ORIGINS (separadas por vírgula). Antes era origin:true + credentials, o que deixava qualquer site ler a API logado.
+const corsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+if (corsOrigins.length > 0) {
+    app.use(cors({ origin: corsOrigins, credentials: true }));
+}
+app.use(originCheck);
+
+// Proxy reverso para Grafana (permite acesso pela mesma porta 8218 sem expor 3001).
+// Só administradores autenticados chegam ao Grafana: ele roda com acesso anônimo interno e não tem login próprio.
+app.use('/grafana', authenticateToken, requireAdminCentralized, (req, res) => {
     if (req.originalUrl === '/grafana') {
         return res.redirect(301, '/grafana/');
     }
@@ -24,13 +37,18 @@ app.use('/grafana', (req, res) => {
     const grafanaHost = process.env.GRAFANA_HOST || 'grafana';
     const grafanaPort = process.env.GRAFANA_PORT || 3000;
 
+    // o cookie de sessão do CineCloud (JWT) não deve vazar para o Grafana
+    const forwardHeaders = { ...req.headers };
+    delete forwardHeaders.cookie;
+    delete forwardHeaders.authorization;
+
     const options = {
         hostname: grafanaHost,
         port: grafanaPort,
         path: req.originalUrl,
         method: req.method,
         headers: {
-            ...req.headers,
+            ...forwardHeaders,
             host: req.headers.host,
             'x-forwarded-for': req.ip,
             'x-forwarded-proto': req.protocol,
@@ -57,7 +75,7 @@ app.use('/grafana', (req, res) => {
 // app, sem precisar expor a porta do MinIO no host compartilhado (mesma técnica do proxy reverso do /grafana acima).
 app.get('/storage/avatars/:filename', profileController.serveAvatar);
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use(correlationMiddleware);
 app.use(metricsCollector);
 
@@ -76,20 +94,20 @@ app.get(['/health', '/api/health'], async (req, res) => {
             timestamp: new Date().toISOString()
         });
     } catch (err) {
+        console.error('Healthcheck: banco indisponível:', err.message);
         return res.status(503).json({
             status: 'unhealthy',
             service: 'catalog-service',
             checks: {
                 database: 'disconnected'
             },
-            error: err.message,
             timestamp: new Date().toISOString()
         });
     }
 });
 
 // Endpoint de Métricas para Prometheus
-app.get('/metrics', metricsEndpoint('catalog-service'));
+app.get('/metrics', internalOnly, metricsEndpoint('catalog-service'));
 
 // Swagger / OpenAPI documentation
 const openapiSpec = require('./docs/openapi.json');
@@ -141,6 +159,13 @@ const swaggerHtml = `<!DOCTYPE html>
 app.get(['/api-docs', '/apidocs'], (req, res) => {
     res.send(swaggerHtml);
 });
+
+// Freio de força bruta / abuso nas rotas públicas de autenticação
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+const recoveryLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: 'Muitas solicitações de recuperação. Tente novamente mais tarde.' });
+app.use(['/api/login', '/api/register', '/api/reset-password'], authLimiter);
+app.use('/api/forgot-password', recoveryLimiter);
+app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 300 }));
 
 // API Routes
 app.use('/api', apiRoutes);

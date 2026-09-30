@@ -1,4 +1,4 @@
-const axios = require('axios');
+const { internalClient: axios } = require('../config/authClient');
 const db = require('../config/db');
 const { uploadAvatar, removeAvatar, streamAvatar } = require('../services/storageService');
 const { logFromReq } = require('../services/loggerService');
@@ -63,7 +63,7 @@ exports.updateProfile = async (req, res) => {
       avatarKey = await uploadAvatar(req.userId, req.file.buffer, req.file.mimetype);
     }
 
-    const response = await axios.put(`${AUTH_SERVICE_URL}/users/${req.userId}/profile`, {
+    const response = await axios.put(`${AUTH_SERVICE_URL}/users/${Number(req.userId)}/profile`, {
       bio,
       ...(avatarKey !== undefined ? { avatarKey } : {})
     });
@@ -90,12 +90,18 @@ exports.updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao atualizar perfil:', error.response?.data || error.message);
-    res.status(error.response?.status || 500).json(error.response?.data || { error: 'Erro ao atualizar perfil' });
+    // Não repassa detalhes internos (mensagens do MinIO/auth) ao cliente
+    const status = error.response?.status === 404 ? 404 : 500;
+    res.status(status).json({ error: status === 404 ? 'Usuário não encontrado' : 'Erro ao atualizar perfil' });
   }
 };
 
 // GET /storage/avatars/:filename — serve o objeto do MinIO através do backend, sem expor a porta do MinIO no host.
 exports.serveAvatar = async (req, res) => {
+  // Só aceita o formato de chave que nós mesmos geramos (id-timestamp-hex.ext): barra path traversal e chaves arbitrárias.
+  if (!/^\d+-\d+-[a-f0-9]{8}\.(jpg|png|webp|gif)$/.test(req.params.filename)) {
+    return res.status(404).json({ error: 'Imagem não encontrada' });
+  }
   try {
     await streamAvatar(req.params.filename, res);
   } catch (error) {

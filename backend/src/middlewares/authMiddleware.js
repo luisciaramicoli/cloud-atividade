@@ -1,7 +1,6 @@
-const axios = require('axios');
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'secret123';
+const { JWT_SECRET } = require('../config/security');
+const { internalClient } = require('../config/authClient');
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
 
 const extractToken = (req) => {
@@ -28,7 +27,7 @@ const authenticateToken = (req, res, next) => {
 
     if (!token) return res.status(401).json({ error: 'Token de autenticação não fornecido' });
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
         if (err) return res.status(403).json({ error: 'Token inválido ou expirado' });
         req.user = user;
         req.userId = user.id;
@@ -41,7 +40,7 @@ const { logFromReq } = require('../services/loggerService');
 // Padrão A: Centralized Enforcement - consulta o auth-service via rede interna
 const requireAdminCentralized = async (req, res, next) => {
     try {
-        const response = await axios.post(`${AUTH_SERVICE_URL}/authorize`, {
+        const response = await internalClient.post(`${AUTH_SERVICE_URL}/authorize`, {
             userId: req.userId,
             requiredRole: 'admin',
             action: req.originalUrl
