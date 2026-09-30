@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import MovieCard from '../components/MovieCard';
 import {
@@ -19,7 +20,8 @@ import {
   Sparkles,
   Layers,
   BookOpen,
-  Activity
+  Activity,
+  UserCircle
 } from 'lucide-react';
 
 export default function Catalog({ onLogout, currentUser }) {
@@ -174,6 +176,11 @@ export default function Catalog({ onLogout, currentUser }) {
 
           {/* Action Buttons Group */}
           <div className="nav-buttons-group">
+            <Link to="/profile" className="btn-nav-admin" title="Meu Perfil">
+              <UserCircle size={14} />
+              <span>Perfil</span>
+            </Link>
+
             {currentUser?.can_manage_users && (
               <>
                 <button onClick={openUsersModal} className="btn-nav-admin" title="Gestão de Usuários (RBAC)">

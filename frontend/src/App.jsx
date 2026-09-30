@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, Link } from 'react-router-dom';
 import api from './services/api';
 import Catalog from './pages/Catalog';
+import Profile from './pages/Profile';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 
@@ -138,6 +139,16 @@ function App() {
         element={
           currentUser ? (
             <Catalog onLogout={handleLogout} currentUser={currentUser} />
+          ) : (
+            <AuthForm onLoginSuccess={handleLoginSuccess} />
+          )
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          currentUser ? (
+            <Profile currentUser={currentUser} onLogout={handleLogout} />
           ) : (
             <AuthForm onLoginSuccess={handleLoginSuccess} />
           )

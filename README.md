@@ -12,6 +12,7 @@ Este repositório contém a implementação da atividade de Cloud, com Frontend 
 - Comentar filmes (armazenados no MariaDB pessoal).
 - **NOVO (Atividade 4):** Controle de Acesso Baseado em Papéis (RBAC) com enforcement no backend e moderação de comentários.
 - **NOVO (Atividade 5):** Observabilidade & Logs de Auditoria — Microsserviço próprio (`log-service`) com Redis Streams, padrão CloudEvents v1.0, ECS e NIST SP 800-92.
+- **NOVO (Atividade 6):** Perfil de usuário com upload de foto — o catálogo vira uma rede social. Foto guardada em Object Storage (MinIO), referência no MariaDB, controle de acesso garantindo que cada um só edita o próprio perfil.
 - **NOVO (Atividade Extra):** Documentação interativa das APIs com Swagger UI e especificação OpenAPI 3.0 para os 3 microsserviços (Catálogo, Auth e Logs).
 - **NOVO (Atividade Extra):** Observabilidade & Métricas com Prometheus e Healthchecks (Liveness & Readiness) com detecção de falha no Docker Compose.
 - **NOVO (Atividade Extra):** Pipeline de CI/CD com GitHub Actions, Testes Automatizados, Publicação no GHCR (com tags de commit) e Deploy Contínuo com Watchtower/Portainer.
@@ -302,6 +303,135 @@ Execute as requisições na pasta **`⭐ 4. Observabilidade & Auditoria Redis (A
 1. **`4.1 [ATV 5] Usuário Comum tenta consultar /api/logs`**: Confirma o retorno **`403 Forbidden`**.
 2. **`4.2 [ATV 5] Admin consulta Trilha de Auditoria /api/logs`**: Retorna **`200 OK`** com todos os eventos estruturados consumidos da Stream do Redis.
 3. **`4.3 [ATV 5] Admin consulta Logs com Paginação Cursor`**: Demonstra a navegação paginada decrescente utilizando o `cursor` do Redis Streams.
+
+---
+
+## Atividade 6 · Upload e Perfil de Usuário (Object Storage com MinIO)
+
+### 1. Arquitetura: duas gravações, um único upload
+
+Até a Atividade 5 o sistema só guardava texto (comentários, favoritos, logs). A foto de perfil é um tipo de dado diferente — arquivo binário — e não vai para a mesma tabela que o resto. Seguindo a prática usada por qualquer sistema real, o **arquivo** vai para um **object storage** (MinIO, compatível com a API S3) e o **MariaDB guarda só a referência** (a chave do objeto). Exibir o perfil depois é ler essa referência e montar a URL — o backend nunca lê o binário do banco.
+
+```mermaid
+flowchart TD
+    Browser["Navegador / React SPA"] -->|"PUT /api/users/:id/profile (multipart)"| App
+
+    subgraph AppGateway ["App / Backend (Porta 3000 -> 8218)"]
+        App["profileController.js"]
+        Multer["uploadMiddleware.js (multer, memoryStorage, valida tipo/tamanho)"]
+        Storage["storageService.js (cliente MinIO)"]
+    end
+
+    subgraph AuthService ["auth-service (Interno)"]
+        AuthCtrl["authController.updateProfile (grava bio + avatar_key)"]
+    end
+
+    subgraph MinIOStorage ["MinIO (Interno, bucket 'avatars')"]
+        Bucket[("Objeto: 9-1730-ab12.png")]
+    end
+
+    subgraph MariaDBTable ["MariaDB — tabela usuarios"]
+        Row[("bio, avatar_key")]
+    end
+
+    Browser -->|"App multer valida o arquivo"| Multer
+    Multer --> App
+    App -->|"1. putObject(buffer)"| Storage
+    Storage --> Bucket
+    App -->|"2. PUT /users/:id/profile { bio, avatarKey }"| AuthCtrl
+    AuthCtrl --> Row
+    Browser -->|"GET /storage/avatars/:key (leitura pública, mesma origem)"| App
+    App -->|"getObject + pipe"| Bucket
+```
+
+Duas gravações separadas por uma única ação de upload: `profileController.updateProfile` primeiro sobe o arquivo pro MinIO (`storageService.uploadAvatar`) e só depois manda a **chave** do objeto pro `auth-service` gravar no MariaDB (`usuarios.avatar_key`) — o mesmo serviço que já é dono de todas as escritas na tabela `usuarios` desde o registro de conta. Se o usuário já tinha uma foto, a antiga é removida do bucket (`storageService.removeAvatar`) pra não acumular objeto órfão.
+
+### 2. Nota de Engenharia: por que o MinIO deste projeto é compilado do código-fonte
+
+Em 2025 a MinIO Inc. **descontinuou a distribuição gratuita das imagens prontas** do servidor (o repositório `minio/minio` foi removido do Docker Hub, o Quay passou a exigir login, e até o binário em `dl.min.io` responde `410 Gone`), empurrando quem quer seguir usando a versão open-source (AGPLv3) para compilar a própria imagem. Em vez de depender de um mirror de terceiros (Bitnami também descontinuou a imagem), o [`minio/Dockerfile`](./minio/Dockerfile) compila o servidor **direto do código-fonte público** (`github.com/minio/minio`, tag de release fixa) com `go build`, sem precisar de login em nenhum registro — só `docker compose up --build` mesmo.
+
+### 3. Modelagem: novas colunas em `usuarios` (gerenciadas pelo `auth-service`)
+
+Seguindo o padrão já usado pra `role` (Atividade 4), as colunas novas são criadas automaticamente na subida do `auth-service` ([`auth-service/src/config/db.js`](./auth-service/src/config/db.js)), com `ALTER TABLE` silencioso pra bancos já existentes:
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `bio` | `VARCHAR(280)` | Biografia curta do usuário (opcional) |
+| `avatar_key` | `VARCHAR(255)` | Chave do objeto no bucket MinIO — **nunca a imagem em si** |
+
+### 4. Endpoints
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /api/profile` | Perfil do usuário autenticado (nome, e-mail, bio, `avatarUrl`) — sempre o dono da sessão (`req.userId`), nunca recebe um id por fora. |
+| `PUT /api/users/:id/profile` | Atualiza bio e/ou foto (`multipart/form-data`, campos `bio` e `foto`). Atualização parcial: mandar só a foto não apaga a bio, e vice-versa. |
+| `GET /storage/avatars/:filename` | Serve o objeto do MinIO através do próprio backend (mesma porta 8218), sem expor a porta do MinIO no host compartilhado — mesma técnica já usada pelo proxy reverso do `/grafana`. |
+
+### 5. Validação do Upload
+
+[`uploadMiddleware.js`](./backend/src/middlewares/uploadMiddleware.js) valida **antes** de qualquer bilhete pro MinIO:
+- **Tipo:** só `image/jpeg`, `image/png`, `image/webp` ou `image/gif` (rejeita qualquer outro `mimetype` com `400 Bad Request`).
+- **Tamanho:** limite de 3 MB (`multer` corta o upload e devolve `400` se estourar).
+
+O arquivo fica só em memória (`multer.memoryStorage()`) até o `putObject` no MinIO — nunca toca o disco do container.
+
+### 6. Decisão de Exibição: bucket público vs. URL pré-assinada (Requisito 3)
+
+**Escolhemos bucket com leitura pública**, pela simplicidade: o bucket `avatars` recebe uma política `s3:GetObject` liberada (`backend/src/config/minio.js`), então a URL do avatar (`/storage/avatars/<chave>`) nunca expira e não precisa ser renovada a cada render do perfil — importante porque a lista de favoritos e o feed de comentários podem exibir vários avatares ao mesmo tempo sem gerar uma chamada extra ao MinIO por imagem.
+
+O acesso de leitura é servido **através do próprio backend** (`GET /storage/avatars/:filename`, sem autenticação) em vez de expor a porta 9000 do MinIO direto pro host — assim a política "pública" fica pública só pra quem já alcança a aplicação, e não abre mais uma porta externa no host compartilhado do Portainer (mesma lógica do proxy do `/grafana`).
+
+**Trade-off assumido:** qualquer pessoa com a URL exata do objeto consegue ver a imagem, sem checagem de sessão — aceitável para avatar de perfil (não é dado sensível, e a chave inclui um sufixo aleatório de 4 bytes, não é enumerável). Se fosse um dado sensível (documento, comprovante), a escolha correta seria **URL pré-assinada** (`presignedGetObject` do cliente MinIO) com expiração curta: paga-se o custo de gerar uma URL nova a cada exibição e de lidar com links que vencem, em troca de controle real de quem acessa.
+
+### 7. Cada um só edita o próprio perfil (Requisito 4)
+
+`profileController.updateProfile` (chamado em `PUT /api/users/:id/profile`) compara o `:id` da URL com `req.userId` — **o id decodificado do JWT verificado em `authenticateToken`**, nunca o que vier no corpo da requisição. Se não bater, a ação é recusada com `403 Forbidden` antes mesmo de tocar no arquivo ou no MinIO:
+
+```js
+if (targetId !== req.userId) {
+  return res.status(403).json({ error: 'Acesso negado: você só pode editar o seu próprio perfil.' });
+}
+```
+
+Mesmo que alguém edite a página, use o Postman/Flashpost ou o cURL direto passando o `id` de outra pessoa na URL, o backend recusa — a identidade de quem está logado vem do cookie `HttpOnly` assinado, não do que a requisição alega.
+
+#### Demonstração prática (validada via cURL contra o ambiente rodando)
+
+```bash
+# Login como o Usuário A (id 9) e como o Usuário B (id 10)
+curl -c a.txt -X POST http://localhost:8218/api/login -H "Content-Type: application/json" \
+  -d '{"email":"a@example.com","password":"..."}'
+curl -c b.txt -X POST http://localhost:8218/api/login -H "Content-Type: application/json" \
+  -d '{"email":"b@example.com","password":"..."}'
+
+# Usuário B tenta editar o perfil do Usuário A (id 9) enviando o ID de outra pessoa na requisição
+curl -b b.txt -X PUT http://localhost:8218/api/users/9/profile -F "bio=hackeado pelo usuario B"
+# -> HTTP 403 Forbidden
+# {"error":"Acesso negado: você só pode editar o seu próprio perfil."}
+
+# O perfil do Usuário A continua intacto
+curl -b a.txt http://localhost:8218/api/profile
+```
+
+A tentativa negada também é registrada na trilha de auditoria da Atividade 5 (`type: "audit.security.access_denied"`, `status: "denied"`), com o mesmo `immediate flush` usado nos outros eventos de segurança do sistema.
+
+📸 *Print do perfil com a foto de upload aparecendo de verdade e print da tentativa recusada: [a adicionar em `docs/`]*
+
+### 8. `docker-compose.yml` com o MinIO
+
+```yaml
+minio:
+  build: ./minio   # compilado do código-fonte — ver seção 2 acima
+  environment:
+    - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+    - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+  volumes:
+    - minio_data:/data
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+```
+
+Sem porta exposta pro host: o `app` fala com o MinIO pela rede interna do Docker (`MINIO_ENDPOINT=minio`), e o bucket + a política de leitura pública são criados automaticamente na subida do backend (`backend/src/config/minio.js`, `ensureBucket()`), sem precisar de nenhum passo manual.
 
 ---
 
@@ -792,6 +922,7 @@ Todas as execuções do pipeline (com status verde para CI e CD) podem ser audit
 - **Microsserviço de Autenticação (Auth):** Node.js, Express, mysql2, bcrypt, jsonwebtoken, nodemailer.
 - **Microsserviço de Auditoria (Log-Service):** Node.js, Express, ioredis.
 - **Banco de Dados Relacional:** MariaDB.
+- **Object Storage (fotos de perfil):** MinIO (compatível com S3), compilado do código-fonte — `multer` + `minio` (cliente JS) no backend.
 - **Armazenamento de Eventos e Trilha de Auditoria:** Redis 7 (Redis Streams + AOF Persistente).
 - **Métricas e Monitoramento:** Prometheus 3.x, Grafana 11.x (Provisionamento declarativo IaC).
 - **Infraestrutura:** Docker, Docker Compose (Multistage build).
@@ -804,5 +935,6 @@ Para rodar via Portainer, configure as variáveis na Stack:
 - `JWT_SECRET`
 - `SMTP_USER`, `SMTP_PASS` (Mailtrap)
 - `PUBLIC_URL` (URL pública para os links de reset de senha)
+- `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` (credenciais do object storage — Atividade 6)
 
 (Veja o `.env.example` para referências).

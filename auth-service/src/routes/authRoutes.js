@@ -10,6 +10,7 @@ router.post('/reset-password', authController.resetPassword);
 // RBAC Authorization & Admin Management
 router.post('/authorize', authController.authorize);
 router.get('/users', authController.listUsers);
+router.put('/users/:id/profile', authController.updateProfile);
 
 module.exports = router;
 

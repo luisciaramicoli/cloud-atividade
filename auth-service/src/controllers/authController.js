@@ -34,7 +34,7 @@ exports.login = async (req, res) => {
         if (!match) return res.status(401).json({ error: 'Senha incorreta' });
 
         const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
-        res.json({ message: 'Login sucesso', token, nome: user.nome, role: user.role });
+        res.json({ message: 'Login sucesso', token, id: user.id, nome: user.nome, role: user.role });
     } catch (error) {
         res.status(500).json({ error: 'Erro interno' });
     }
@@ -116,6 +116,32 @@ exports.authorize = async (req, res) => {
     } catch (error) {
         console.error('Erro na autorização do auth-service:', error);
         return res.status(500).json({ error: 'Erro interno no auth-service' });
+    }
+};
+
+// Atividade 6: grava bio + referência da foto (chave do objeto no MinIO) do usuário.
+// Chamado apenas pelo backend (rede interna), que já validou que o solicitante é o dono do próprio perfil.
+exports.updateProfile = async (req, res) => {
+    const { id } = req.params;
+    const { bio, avatarKey } = req.body;
+    try {
+        const [rows] = await db.execute('SELECT id FROM usuarios WHERE id = ?', [id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+        // Atualização parcial: só troca os campos que vieram na requisição (ex.: enviar só a foto não apaga a bio).
+        const sets = [], params = [];
+        if (bio !== undefined) { sets.push('bio = ?'); params.push(bio); }
+        if (avatarKey !== undefined) { sets.push('avatar_key = ?'); params.push(avatarKey); }
+        if (sets.length > 0) {
+            params.push(id);
+            await db.execute(`UPDATE usuarios SET ${sets.join(', ')} WHERE id = ?`, params);
+        }
+
+        const [updated] = await db.execute('SELECT id, nome, email, role, bio, avatar_key, criado_em FROM usuarios WHERE id = ?', [id]);
+        res.json({ message: 'Perfil atualizado', user: updated[0] });
+    } catch (error) {
+        console.error('Erro ao atualizar perfil:', error);
+        res.status(500).json({ error: 'Erro ao atualizar perfil' });
     }
 };
 

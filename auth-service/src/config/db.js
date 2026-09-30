@@ -24,6 +24,8 @@ async function initDb() {
         email VARCHAR(150) UNIQUE NOT NULL,
         senha_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'user',
+        bio VARCHAR(280) DEFAULT NULL,
+        avatar_key VARCHAR(255) DEFAULT NULL,
         criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -44,6 +46,18 @@ async function initDb() {
     // Criar coluna 'role' silenciosamente em bancos legados
     try {
       await connection.query(`ALTER TABLE usuarios ADD COLUMN role VARCHAR(50) DEFAULT 'user'`);
+    } catch (e) {
+      // Ignora erro se a coluna já existir
+    }
+
+    // Atividade 6: perfil social (bio + referência da foto no object storage) em bancos legados
+    try {
+      await connection.query(`ALTER TABLE usuarios ADD COLUMN bio VARCHAR(280) DEFAULT NULL`);
+    } catch (e) {
+      // Ignora erro se a coluna já existir
+    }
+    try {
+      await connection.query(`ALTER TABLE usuarios ADD COLUMN avatar_key VARCHAR(255) DEFAULT NULL`);
     } catch (e) {
       // Ignora erro se a coluna já existir
     }

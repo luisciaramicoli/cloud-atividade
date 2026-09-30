@@ -18,7 +18,7 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
     try {
         const response = await axios.post(`${AUTH_SERVICE_URL}/login`, req.body);
-        const { token, nome, role } = response.data;
+        const { token, id, nome, role } = response.data;
 
         // Armazenamento de credencial exclusivamente no backend via cookie HttpOnly
         res.cookie('token', token, {
@@ -53,6 +53,7 @@ exports.login = async (req, res) => {
         res.status(response.status).json({
             message: response.data.message || 'Login sucesso',
             user: {
+                id,
                 nome: nome || 'Usuário',
                 can_manage_users: canManageUsers
             }
@@ -134,9 +135,10 @@ exports.me = async (req, res) => {
             }
         }
 
-        // Nenhuma role bruta ou token é exposto ao front
+        // Nenhuma role bruta ou token é exposto ao front (o próprio id é exposto ao dono da sessão, para endereçar seu perfil)
         res.json({
             user: {
+                id: req.userId,
                 nome: userName,
                 can_manage_users: canManageUsers
             }

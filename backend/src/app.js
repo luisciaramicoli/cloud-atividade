@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const apiRoutes = require('./routes/apiRoutes');
 const pool = require('./config/db');
+const profileController = require('./controllers/profileController');
 const correlationMiddleware = require('./middlewares/correlationMiddleware');
 const { metricsCollector, metricsEndpoint } = require('./middlewares/metricsMiddleware');
 
@@ -51,6 +52,10 @@ app.use('/grafana', (req, res) => {
 
     req.pipe(proxyReq, { end: true });
 });
+
+// Atividade 6: serve as fotos de perfil guardadas no MinIO (bucket de leitura pública) pela mesma origem/porta do
+// app, sem precisar expor a porta do MinIO no host compartilhado (mesma técnica do proxy reverso do /grafana acima).
+app.get('/storage/avatars/:filename', profileController.serveAvatar);
 
 app.use(express.json());
 app.use(correlationMiddleware);
