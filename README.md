@@ -1,5 +1,9 @@
 # Atividade de Cloud — Professor: [github.com/siriani](https://github.com/siriani)
 
+## 📄 Avaliação Bimestral (P1)
+- **Relatório Bimestral (PDF):** [docs/P1_ISW055_Luis_Ciaramicoli.pdf](docs/P1_ISW055_Luis_Ciaramicoli.pdf)
+- **Código-fonte Typst:** [relatorio-p1/p1.typ](relatorio-p1/p1.typ)
+
 Este repositório contém a implementação da atividade de Cloud, com Frontend em React (Vite) e Backend em Node.js (Express) com MariaDB, integrados à API da TMDB.
 
 ## Funcionalidades
