@@ -61,8 +61,8 @@ exports.login = async (req, res) => {
         const match = await bcrypt.compare(password, user ? user.senha_hash : DUMMY_HASH);
         if (!user || !match) return res.status(401).json({ error: 'E-mail ou senha incorretos' });
 
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '2h' });
-        res.json({ message: 'Login sucesso', token, id: user.id, nome: user.nome, role: user.role });
+        const token = jwt.sign({ id: user.id, email: user.email, role: user.role, premium: Boolean(user.premium) }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '2h' });
+        res.json({ message: 'Login sucesso', token, id: user.id, nome: user.nome, role: user.role, premium: Boolean(user.premium) });
     } catch (error) {
         res.status(500).json({ error: 'Erro interno' });
     }
@@ -134,26 +134,27 @@ exports.authorize = async (req, res) => {
     if (!Number.isInteger(Number(userId)) || Number(userId) <= 0) return res.status(400).json({ error: 'userId é obrigatório' });
 
     try {
-        const [rows] = await db.execute('SELECT id, nome, email, role FROM usuarios WHERE id = ?', [userId]);
+        const [rows] = await db.execute('SELECT id, nome, email, role, premium FROM usuarios WHERE id = ?', [userId]);
         if (rows.length === 0) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
 
         const user = rows[0];
         const userRole = user.role || 'user';
+        const isPremium = Boolean(user.premium);
         const isAdmin = userRole === 'admin';
 
         if (requiredRole === 'admin' && !isAdmin) {
             return res.status(403).json({
                 allowed: false,
                 error: 'Permissão negada: ação restrita a administradores.',
-                user: { id: user.id, nome: user.nome, role: userRole }
+                user: { id: user.id, nome: user.nome, role: userRole, premium: isPremium }
             });
         }
 
         return res.json({
             allowed: true,
-            user: { id: user.id, nome: user.nome, role: userRole }
+            user: { id: user.id, nome: user.nome, role: userRole, premium: isPremium }
         });
     } catch (error) {
         console.error('Erro na autorização do auth-service:', error);
@@ -184,7 +185,7 @@ exports.updateProfile = async (req, res) => {
             await db.execute(`UPDATE usuarios SET ${sets.join(', ')} WHERE id = ?`, params);
         }
 
-        const [updated] = await db.execute('SELECT id, nome, email, role, bio, avatar_key, criado_em FROM usuarios WHERE id = ?', [id]);
+        const [updated] = await db.execute('SELECT id, nome, email, role, bio, avatar_key, premium, criado_em FROM usuarios WHERE id = ?', [id]);
         res.json({ message: 'Perfil atualizado', user: updated[0] });
     } catch (error) {
         console.error('Erro ao atualizar perfil:', error);
@@ -194,7 +195,7 @@ exports.updateProfile = async (req, res) => {
 
 exports.listUsers = async (req, res) => {
     try {
-        const [rows] = await db.execute('SELECT id, nome, email, role, criado_em FROM usuarios ORDER BY id ASC');
+        const [rows] = await db.execute('SELECT id, nome, email, role, premium, criado_em FROM usuarios ORDER BY id ASC');
         res.json(rows);
     } catch (error) {
         console.error('Erro ao listar usuários:', error);

@@ -17,7 +17,8 @@ Este repositório contém a implementação da atividade de Cloud, com Frontend 
 - **NOVO (Atividade 4):** Controle de Acesso Baseado em Papéis (RBAC) com enforcement no backend e moderação de comentários.
 - **NOVO (Atividade 5):** Observabilidade & Logs de Auditoria — Microsserviço próprio (`log-service`) com Redis Streams, padrão CloudEvents v1.0, ECS e NIST SP 800-92.
 - **NOVO (Atividade 6):** Perfil de usuário com upload de foto — o catálogo vira uma rede social. Foto guardada em Object Storage (MinIO), referência no MariaDB, controle de acesso garantindo que cada um só edita o próprio perfil.
-- **NOVO (Atividade Extra):** Documentação interativa das APIs com Swagger UI e especificação OpenAPI 3.0 para os 3 microsserviços (Catálogo, Auth e Logs).
+- **NOVO (Atividade 7):** Plano Premium com Stripe — Serviço baseado em pagamento (modo de teste), Checkout Session hospedado, Webhook assíncrono com assinatura criptográfica HMAC-SHA256, conformidade PCI-DSS (zero dados de cartão salvos) e benefício comprovável (favoritos ilimitados e selo ⭐ Premium).
+- **NOVO (Atividade Extra):** Documentação interativa das APIs com Swagger UI e especificação OpenAPI 3.0 para os microsserviços.
 - **NOVO (Atividade Extra):** Observabilidade & Métricas com Prometheus e Healthchecks (Liveness & Readiness) com detecção de falha no Docker Compose.
 - **NOVO (Atividade Extra):** Pipeline de CI/CD com GitHub Actions, Testes Automatizados, Publicação no GHCR (com tags de commit) e Deploy Contínuo com Watchtower/Portainer.
 
@@ -940,6 +941,60 @@ Revisão completa de segurança aplicada ao projeto. A tabela completa (20 itens
 | **Containers e CI** | Imagens rodando como `node` (sem root); permissão `packages: write` apenas no job de publicação; webhook do Portainer guardado como secret. |
 
 Variáveis de segurança da stack: `JWT_SECRET` (obrigatória), `GRAFANA_ADMIN_PASSWORD` (obrigatória), `COOKIE_SECURE`, `TRUST_PROXY` e `CORS_ORIGINS` (opcionais). Testes: `backend/tests/security.test.js`.
+
+---
+
+## Atividade 7 · Serviço Baseado em Pagamento (Plano Premium com Stripe)
+
+Documentação técnica completa da arquitetura, fluxo assíncrono e segurança em [docs/plano-premium-stripe.md](docs/plano-premium-stripe.md).
+
+O catálogo ganha um modelo de negócio autossustentável: um plano pago, cobrado de verdade (em modo de teste) pelo provedor de pagamentos **Stripe** — sem nunca armazenar dados sensíveis de cartão de crédito no banco de dados.
+
+### 1. Por que pagamento é um serviço à parte
+Guardar números de cartão de crédito, códigos CVV e validade exige conformidade estrita com o padrão **PCI-DSS**. A solução da indústria adotada foi delegar toda a coleta dos dados para a página segura hospedada pelo próprio Stripe (**Stripe Checkout Session**). O backend do CineCloud nunca recebe os dados de cartão — ele apenas recebe a confirmação assíncrona de que o pagamento aconteceu através de um **Webhook HTTP assinado digitalmente**.
+
+---
+
+### 2. O que foi Implementado
+
+| Requisito | Detalhe da Implementação |
+|---|---|
+| **Plano no Stripe (Modo de Teste)** | Produto `Plano Premium — CineCloud` (`prod_VRlWb9esmtjOyQ`) com preço recorrente de **R$ 9,90/mês** (`price_1UQrzlD9qoJtG1qnrVYlB8lU`) na sandbox oficial do Stripe. |
+| **Endpoint de Checkout** | `POST /api/checkout`: Cria a sessão no Stripe vinculada ao `userId` autenticado (`client_reference_id`) e redireciona o cliente para a página segura. |
+| **Endpoint de Webhook** | `POST /api/webhook`: Rota assíncrona que recebe o evento `checkout.session.completed`, valida a assinatura criptográfica (`stripe-signature` com HMAC-SHA256 e `rawBody`), e atualiza o usuário para `premium = 1` no MariaDB. |
+| **Benefício Real Comprovável** | **Usuários gratuitos:** limitados a no máximo 5 filmes favoritados. Ao tentar adicionar o 6º, o backend recusa com **HTTP 403 Forbidden** (`limitReached: true`) e abre o modal de upgrade. **Usuários Premium:** favoritos ilimitados + selo dourado ⭐ Premium no cabeçalho e perfil. |
+| **Segurança Financeira (PCI-DSS)** | O banco de dados armazena apenas `stripe_customer_id` e `stripe_subscription_id`. Nenhuma informação de cartão passa ou reside no CineCloud. |
+
+---
+
+### 3. Evidências e Prints da Atividade (Requisito de Entrega)
+
+#### 📸 Print 1: Checkout do Stripe em Modo de Teste
+Checkout oficial seguro hospedado pela Stripe para o **Plano Premium — CineCloud** (R$ 9,90/mês) em modo de teste:
+
+![Stripe Checkout](./docs/print-stripe-checkout.png)
+
+---
+
+#### 📸 Print 2: Webhook do Stripe e Usuário virando Premium no MariaDB
+Terminal demonstrando a entrega do webhook pelo Stripe CLI com status **200 OK**, validação da assinatura e consulta direta no banco MariaDB com `premium: 1 (TRUE)`:
+
+![Stripe Webhook e Banco de Dados](./docs/print-stripe-webhook-banco.png)
+
+---
+
+#### 📸 Print 3: Benefício Premium Ativo (Catálogo e Perfil)
+Usuário Premium autenticado exibindo o selo dourado **⭐ PREMIUM**, favoritos ilimitados e o perfil com a assinatura ativa:
+
+![Benefício Premium no Catálogo](./docs/print-beneficio-premium.png)
+![Perfil com Plano Ativo](./docs/print-perfil-premium.png)
+
+---
+
+#### 📸 Print 4: Trava do Plano Gratuito (403 Forbidden) e Modal de Upgrade
+Usuário gratuito atingindo o limite de 5 favoritos com mensagem explicativa e modal de upgrade com direcionamento direto para o Stripe:
+
+![Limite do Plano Gratuito e Modal](./docs/print-limite-gratuito-403.png)
 
 ---
 

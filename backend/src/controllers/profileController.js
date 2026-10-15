@@ -13,12 +13,13 @@ function avatarUrl(avatarKey) {
 exports.getProfile = async (req, res) => {
   try {
     const [rows] = await db.execute(
-      'SELECT id, nome, email, role, bio, avatar_key, criado_em FROM usuarios WHERE id = ?',
+      'SELECT id, nome, email, role, bio, avatar_key, premium, criado_em FROM usuarios WHERE id = ?',
       [req.userId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
 
     const u = rows[0];
+    const isPremium = Boolean(u.premium);
     res.json({
       id: u.id,
       nome: u.nome,
@@ -26,7 +27,9 @@ exports.getProfile = async (req, res) => {
       role: u.role,
       bio: u.bio || '',
       avatarUrl: avatarUrl(u.avatar_key),
-      criadoEm: u.criado_em
+      criadoEm: u.criado_em,
+      premium: isPremium,
+      is_premium: isPremium
     });
   } catch (error) {
     console.error('Erro ao buscar perfil:', error);

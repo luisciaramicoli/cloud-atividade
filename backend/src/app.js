@@ -75,7 +75,13 @@ app.use('/grafana', authenticateToken, requireAdminCentralized, (req, res) => {
 // app, sem precisar expor a porta do MinIO no host compartilhado (mesma técnica do proxy reverso do /grafana acima).
 app.get('/storage/avatars/:filename', profileController.serveAvatar);
 
-app.use(express.json({ limit: '100kb' }));
+// Preserva rawBody em Buffer para validação criptográfica de assinatura de webhook do Stripe (Atividade 7)
+app.use(express.json({
+    limit: '200kb',
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(correlationMiddleware);
 app.use(metricsCollector);
 

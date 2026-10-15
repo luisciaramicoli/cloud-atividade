@@ -41,11 +41,45 @@ export default function Catalog({ onLogout, currentUser }) {
   const [logsList, setLogsList] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
+  // Atividade 7: Plano Premium com Stripe
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [toastMessage, setToastMessage] = useState({ type: '', text: '' });
+
   useEffect(() => {
     fetchMovies();
     fetchFavorites();
     fetchAvatar();
+
+    // Feedback de retorno do Checkout Stripe
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success') {
+      setToastMessage({
+        type: 'success',
+        text: '🎉 Pagamento confirmado pelo Stripe! Seu Plano Premium foi ativado com sucesso.'
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('checkout') === 'cancel') {
+      setToastMessage({
+        type: 'info',
+        text: 'O checkout do Stripe foi cancelado. Você pode assinar a qualquer momento!'
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
+
+  const handleStartCheckout = async () => {
+    setStartingCheckout(true);
+    try {
+      const res = await api.post('checkout');
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao iniciar checkout do Stripe.');
+      setStartingCheckout(false);
+    }
+  };
 
   // A foto fica no MinIO; o catálogo só precisa da URL devolvida pelo perfil. Se falhar, mostra o ícone padrão.
   const fetchAvatar = async () => {
@@ -123,7 +157,11 @@ export default function Catalog({ onLogout, currentUser }) {
       }
       fetchFavorites();
     } catch (err) {
-      console.error(err);
+      if (err.response?.status === 403 && err.response?.data?.limitReached) {
+        setShowUpgradeModal(true);
+      } else {
+        console.error(err);
+      }
     }
   };
 
@@ -175,6 +213,12 @@ export default function Catalog({ onLogout, currentUser }) {
                   )}
                 </Link>
                 <span className="user-name">{currentUser?.nome || 'Usuário'}</span>
+                {currentUser?.is_premium && (
+                  <span className="role-pill role-premium" title="Assinante do Plano Premium">
+                    <Sparkles size={12} />
+                    <span>Premium</span>
+                  </span>
+                )}
                 <span className={`role-pill ${currentUser?.can_manage_users ? 'role-admin' : 'role-user'}`}>
                   {currentUser?.can_manage_users ? (
                     <>
@@ -195,6 +239,13 @@ export default function Catalog({ onLogout, currentUser }) {
 
           {/* Action Buttons Group */}
           <div className="nav-buttons-group">
+            {!currentUser?.is_premium && (
+              <button onClick={() => setShowUpgradeModal(true)} className="btn-nav-premium" title="Assinar Plano Premium (R$ 9,90/mês)">
+                <Sparkles size={14} />
+                <span>Assinar Premium</span>
+              </button>
+            )}
+
             <Link to="/profile" className="btn-nav-admin" title="Meu Perfil">
               <UserCircle size={14} />
               <span>Perfil</span>
@@ -274,11 +325,40 @@ export default function Catalog({ onLogout, currentUser }) {
             >
               <Star size={15} className={filterMode === 'favorites' ? 'fill-gold' : ''} />
               <span>Favoritos</span>
-              <span className="tab-counter">{favorites.length}</span>
+              <span className="tab-counter">{favorites.length}{currentUser?.is_premium ? '' : '/5'}</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Toast de Retorno do Stripe */}
+      {toastMessage.text && (
+        <div style={{ maxWidth: '1280px', margin: '1rem auto 0 auto', padding: '0.85rem 1.25rem', borderRadius: '12px', background: toastMessage.type === 'success' ? '#064e3b' : '#1e293b', border: toastMessage.type === 'success' ? '1px solid #059669' : '1px solid #475569', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={18} color="#34d399" />
+            <span>{toastMessage.text}</span>
+          </div>
+          <button onClick={() => setToastMessage({ type: '', text: '' })} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Banner de Benefício do Plano Premium (Atividade 7) */}
+      {!currentUser?.is_premium && (
+        <div className="premium-limit-banner">
+          <div className="premium-limit-banner-text">
+            <Sparkles size={18} className="text-amber-400" />
+            <span>
+              <strong>Plano Gratuito:</strong> Você utilizou <strong>{favorites.length} de 5</strong> favoritos permitidos. Desbloqueie favoritos ilimitados com o <strong>Plano Premium (R$ 9,90/mês)</strong>!
+            </span>
+          </div>
+          <button onClick={() => setShowUpgradeModal(true)} className="btn-nav-premium">
+            <Sparkles size={14} />
+            <span>Fazer Upgrade</span>
+          </button>
+        </div>
+      )}
 
       {/* Mensagem de Erro Geral */}
       {error && (
@@ -509,6 +589,67 @@ export default function Catalog({ onLogout, currentUser }) {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Upgrade Plano Premium com Stripe (Atividade 7) */}
+      {showUpgradeModal && (
+        <div className="modal-backdrop-overlay" onClick={() => setShowUpgradeModal(false)}>
+          <div className="modal-premium-card" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setShowUpgradeModal(false)}
+              className="btn-close-modal"
+              style={{ position: 'absolute', top: '1rem', right: '1rem' }}
+            >
+              <X size={20} />
+            </button>
+
+            <div className="premium-badge-icon">
+              <Sparkles size={32} />
+            </div>
+
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.25rem' }}>CineCloud Premium</h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.92rem' }}>
+              Cobrança segura e automatizada via provedor Stripe
+            </p>
+
+            <div style={{ margin: '1.25rem 0', padding: '0.5rem 0' }}>
+              <span style={{ fontSize: '2.5rem', fontWeight: 900, color: '#facc15' }}>R$ 9,90</span>
+              <span style={{ color: '#94a3b8', fontSize: '1rem' }}> / mês</span>
+            </div>
+
+            <div className="premium-feature-list">
+              <div className="premium-feature-item">
+                <CheckCircle2 size={16} color="#10b981" />
+                <span><strong>Favoritos Ilimitados</strong> (sem a restrição de 5 filmes do plano gratuito)</span>
+              </div>
+              <div className="premium-feature-item">
+                <CheckCircle2 size={16} color="#10b981" />
+                <span><strong>Selo Exclusivo ⭐ Premium</strong> no perfil e cabeçalho</span>
+              </div>
+              <div className="premium-feature-item">
+                <CheckCircle2 size={16} color="#10b981" />
+                <span><strong>Segurança Total:</strong> Checkout hospedado pelo Stripe (conformidade PCI-DSS)</span>
+              </div>
+              <div className="premium-feature-item">
+                <CheckCircle2 size={16} color="#10b981" />
+                <span>Confirmação em tempo real via Webhook assíncrono</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleStartCheckout}
+              disabled={startingCheckout}
+              className="btn-checkout-stripe"
+            >
+              <Sparkles size={18} />
+              <span>{startingCheckout ? 'Iniciando Checkout...' : 'Assinar com Stripe'}</span>
+            </button>
+
+            <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.85rem' }}>
+              🔒 Nenhum dado de cartão é salvo pelo nosso servidor.
+            </p>
           </div>
         </div>
       )}

@@ -56,7 +56,49 @@ exports.addFavorite = async (req, res) => {
     const tmdb_movie_id = toPositiveInt(req.body.tmdb_movie_id);
     if (!tmdb_movie_id) return res.status(400).json({ error: 'tmdb_movie_id inválido' });
     try {
-        await db.execute('INSERT IGNORE INTO favoritos (usuario_id, tmdb_movie_id) VALUES (?, ?)', [req.userId, tmdb_movie_id]);
+        // Verificar se já está nos favoritos
+        const [existing] = await db.execute(
+            'SELECT id FROM favoritos WHERE usuario_id = ? AND tmdb_movie_id = ?',
+            [req.userId, tmdb_movie_id]
+        );
+
+        if (existing.length === 0) {
+            // Verificar benefício do plano Premium (Atividade 7)
+            const [userRows] = await db.execute('SELECT premium FROM usuarios WHERE id = ?', [req.userId]);
+            const isPremium = Boolean(userRows[0]?.premium);
+
+            if (!isPremium) {
+                const [countRows] = await db.execute(
+                    'SELECT COUNT(*) as total FROM favoritos WHERE usuario_id = ?',
+                    [req.userId]
+                );
+                const totalFavorites = countRows[0]?.total || 0;
+
+                if (totalFavorites >= 5) {
+                    logFromReq(req, {
+                        type: 'audit.favorite.limit_reached',
+                        action: 'limite_favoritos_atingido',
+                        status: 'denied',
+                        target: { type: 'movie', id: tmdb_movie_id },
+                        metadata: { motivo: 'Limite de 5 favoritos atingido para plano gratuito' }
+                    });
+
+                    return res.status(403).json({
+                        error: 'Limite de 5 favoritos atingido para contas gratuitas. Assine o Plano Premium para favoritos ilimitados!',
+                        limitReached: true,
+                        maxFavorites: 5
+                    });
+                }
+            }
+
+            const titulo = typeof req.body.titulo === 'string' && req.body.titulo.trim() ? req.body.titulo.trim().slice(0, 255) : `Filme #${tmdb_movie_id}`;
+            const poster_path = typeof req.body.poster_path === 'string' ? req.body.poster_path.trim().slice(0, 255) : null;
+
+            await db.execute(
+                'INSERT INTO favoritos (usuario_id, tmdb_movie_id, titulo, poster_path) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE titulo = VALUES(titulo)',
+                [req.userId, tmdb_movie_id, titulo, poster_path]
+            );
+        }
         
         logFromReq(req, {
             type: 'audit.favorite.add',
@@ -67,6 +109,7 @@ exports.addFavorite = async (req, res) => {
 
         res.json({ message: 'Adicionado aos favoritos' });
     } catch (error) {
+        console.error('Erro ao adicionar favorito:', error);
         res.status(500).json({ error: 'Erro no banco de dados' });
     }
 };

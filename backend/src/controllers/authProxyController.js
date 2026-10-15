@@ -50,12 +50,16 @@ exports.login = async (req, res) => {
             metadata: { nome }
         });
 
+        const isPremium = Boolean(response.data.premium);
+
         res.status(response.status).json({
             message: response.data.message || 'Login sucesso',
             user: {
                 id,
                 nome: nome || 'Usuário',
-                can_manage_users: canManageUsers
+                can_manage_users: canManageUsers,
+                is_premium: isPremium,
+                premium: isPremium
             }
         });
     } catch (error) {
@@ -118,6 +122,7 @@ exports.me = async (req, res) => {
         // Validação centralizada de autorização junto ao auth-service
         let canManageUsers = false;
         let userName = req.user?.nome || 'Usuário';
+        let isPremium = false;
 
         try {
             const authResponse = await axios.post(`${AUTH_SERVICE_URL}/authorize`, {
@@ -129,10 +134,16 @@ exports.me = async (req, res) => {
             if (authResponse.data?.user?.nome) {
                 userName = authResponse.data.user.nome;
             }
+            if (authResponse.data?.user?.premium !== undefined) {
+                isPremium = Boolean(authResponse.data.user.premium);
+            }
         } catch (e) {
             canManageUsers = false;
             if (e.response?.data?.user?.nome) {
                 userName = e.response.data.user.nome;
+            }
+            if (e.response?.data?.user?.premium !== undefined) {
+                isPremium = Boolean(e.response.data.user.premium);
             }
         }
 
@@ -141,7 +152,9 @@ exports.me = async (req, res) => {
             user: {
                 id: req.userId,
                 nome: userName,
-                can_manage_users: canManageUsers
+                can_manage_users: canManageUsers,
+                is_premium: isPremium,
+                premium: isPremium
             }
         });
     } catch (error) {

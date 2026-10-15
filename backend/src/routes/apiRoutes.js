@@ -4,6 +4,7 @@ const router = express.Router();
 const authProxyController = require('../controllers/authProxyController');
 const catalogController = require('../controllers/catalogController');
 const profileController = require('../controllers/profileController');
+const paymentController = require('../controllers/paymentController');
 const { authenticateToken, requireAdminCentralized } = require('../middlewares/authMiddleware');
 const { avatarUpload } = require('../middlewares/uploadMiddleware');
 
@@ -19,10 +20,14 @@ router.post('/reset-password', authProxyController.resetPassword);
 router.get('/users', authenticateToken, requireAdminCentralized, authProxyController.listUsers);
 router.get('/logs', authenticateToken, requireAdminCentralized, authProxyController.listLogs);
 
-
 // Perfil de usuário (Atividade 6): cada um só edita o próprio (checado pelo req.userId do JWT, nunca pelo :id da URL)
 router.get('/profile', authenticateToken, profileController.getProfile);
 router.put('/users/:id/profile', authenticateToken, avatarUpload, profileController.updateProfile);
+
+// Atividade 7: Plano Premium com Stripe (Checkout e Webhook de confirmação assíncrona)
+router.post('/checkout', authenticateToken, paymentController.createCheckoutSession);
+router.post('/webhook', paymentController.handleWebhook);
+router.get('/subscription/status', authenticateToken, paymentController.getSubscriptionStatus);
 
 // Catalog API (Protected)
 router.get('/movies', authenticateToken, catalogController.getMovies);

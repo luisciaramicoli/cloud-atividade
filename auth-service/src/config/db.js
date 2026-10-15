@@ -62,6 +62,23 @@ async function initDb() {
       // Ignora erro se a coluna já existir
     }
 
+    // Atividade 7: Plano Premium com Stripe (cobrança, webhook e benefício)
+    try {
+      await connection.query(`ALTER TABLE usuarios ADD COLUMN premium BOOLEAN DEFAULT FALSE`);
+    } catch (e) {
+      // Ignora erro se a coluna já existir
+    }
+    try {
+      await connection.query(`ALTER TABLE usuarios ADD COLUMN stripe_customer_id VARCHAR(255) DEFAULT NULL`);
+    } catch (e) {
+      // Ignora erro se a coluna já existir
+    }
+    try {
+      await connection.query(`ALTER TABLE usuarios ADD COLUMN stripe_subscription_id VARCHAR(255) DEFAULT NULL`);
+    } catch (e) {
+      // Ignora erro se a coluna já existir
+    }
+
     connection.release();
     console.log('Auth-Service: Tabelas sincronizadas.');
   } catch (error) {

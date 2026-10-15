@@ -39,9 +39,92 @@
     {
       "name": "Auditoria & Observabilidade",
       "description": "Consulta dos eventos auditados armazenados em Redis Streams com Correlation ID."
+    },
+    {
+      "name": "Pagamento & Assinatura (Stripe)",
+      "description": "Gerenciamento de cobrança, checkout seguro e webhook assíncrono do Stripe para o Plano Premium."
     }
   ],
   "paths": {
+    "/api/checkout": {
+      "post": {
+        "tags": ["Pagamento & Assinatura (Stripe)"],
+        "summary": "Iniciar Checkout do Plano Premium (Stripe)",
+        "description": "Cria uma sessão de checkout do Stripe em modo de teste para o plano de R$ 9,90/mês e retorna a URL segura para redirecionamento do cliente. Nenhum dado de cartão passa pela aplicação.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessão de checkout criada com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+                  "sessionId": "cs_test_..."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Usuário já possui assinatura ativa"
+          },
+          "503": {
+            "description": "Serviço Stripe indisponível ou não configurado"
+          }
+        }
+      }
+    },
+    "/api/webhook": {
+      "post": {
+        "tags": ["Pagamento & Assinatura (Stripe)"],
+        "summary": "Webhook de Notificações do Stripe",
+        "description": "Endpoint assíncrono chamado pelo Stripe para confirmar pagamentos e assinaturas. Valida o cabeçalho stripe-signature criptograficamente com o segredo do webhook e ativa o plano premium (premium: true).",
+        "responses": {
+          "200": {
+            "description": "Evento recebido e processado com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "received": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Assinatura do webhook inválida ou evento malformado"
+          }
+        }
+      }
+    },
+    "/api/subscription/status": {
+      "get": {
+        "tags": ["Pagamento & Assinatura (Stripe)"],
+        "summary": "Consultar status da assinatura do usuário",
+        "description": "Retorna o status atual do plano do usuário autenticado (se é premium e possui assinatura ativa).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status da assinatura",
+            "content": {
+              "application/json": {
+                "example": {
+                  "is_premium": true,
+                  "has_subscription": true,
+                  "stripe_customer_id": "cus_..."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/register": {
       "post": {
         "tags": ["Autenticação & Sessão"],

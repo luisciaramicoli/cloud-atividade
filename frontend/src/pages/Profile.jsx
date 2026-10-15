@@ -12,7 +12,8 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Save
+  Save,
+  Sparkles
 } from 'lucide-react';
 
 const BIO_MAX_LEN = 280;
@@ -28,7 +29,21 @@ export default function Profile({ currentUser, onLogout }) {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', message: '' });
+  const [startingCheckout, setStartingCheckout] = useState(false);
   const fileInputRef = useRef(null);
+
+  const handleStartCheckout = async () => {
+    setStartingCheckout(true);
+    try {
+      const res = await api.post('checkout');
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao conectar ao Stripe.');
+      setStartingCheckout(false);
+    }
+  };
 
   useEffect(() => {
     fetchAll();
@@ -117,6 +132,12 @@ export default function Profile({ currentUser, onLogout }) {
             <div className="user-identity-bar">
               <div className="user-profile-chip">
                 <span className="user-name">{currentUser?.nome || 'Usuário'}</span>
+                {profile?.premium && (
+                  <span className="role-pill role-premium" title="Assinante do Plano Premium">
+                    <Sparkles size={12} />
+                    <span>Premium</span>
+                  </span>
+                )}
                 <span className={`role-pill ${currentUser?.can_manage_users ? 'role-admin' : 'role-user'}`}>
                   {currentUser?.can_manage_users ? (
                     <>
@@ -201,6 +222,47 @@ export default function Profile({ currentUser, onLogout }) {
                 <span>{saving ? 'Salvando...' : 'Salvar alterações'}</span>
               </button>
             </form>
+
+            {/* Box de Assinatura Stripe (Atividade 7) */}
+            <div className="profile-subscription-box">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>
+                  Plano & Assinatura
+                </span>
+                {profile?.premium ? (
+                  <span className="role-pill role-premium">⭐ Premium</span>
+                ) : (
+                  <span className="role-pill role-user">Gratuito</span>
+                )}
+              </div>
+
+              {profile?.premium ? (
+                <div>
+                  <p style={{ fontSize: '0.88rem', color: '#34d399', margin: '0.25rem 0', fontWeight: 600 }}>
+                    ✓ Benefício Ativo: Favoritos Ilimitados
+                  </p>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0.25rem 0' }}>
+                    Cobrança gerenciada de forma segura pelo Stripe.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ fontSize: '0.85rem', color: '#e2e8f0', margin: '0.25rem 0' }}>
+                    Status: <strong>Plano Gratuito (limite de 5 favoritos)</strong>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleStartCheckout}
+                    disabled={startingCheckout}
+                    className="btn-checkout-stripe"
+                    style={{ marginTop: '0.75rem', padding: '0.65rem 1rem', fontSize: '0.88rem' }}
+                  >
+                    <Sparkles size={15} />
+                    <span>{startingCheckout ? 'Conectando ao Stripe...' : 'Assinar Plano Premium (R$ 9,90/mês)'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="profile-favorites-section">
