@@ -4,6 +4,9 @@
 - **Relatório Bimestral (PDF):** [docs/P1_ISW055_Luis_Ciaramicoli.pdf](docs/P1_ISW055_Luis_Ciaramicoli.pdf)
 - **Código-fonte Typst:** [relatorio-p1/p1.typ](relatorio-p1/p1.typ)
 
+## 📚 Documentação Reversa Integral do Sistema (Atividade 8)
+- **Dossiê Técnico Completo:** [DOCUMENTACAO.md](DOCUMENTACAO.md) — Engenharia reversa completa do CineCloud cobrindo Especificação Funcional, Arquitetura Distribuída ("Big Picture"), Regras de Negócio ("Se X, então Y"), Modelo de Dados Relacional/NoSQL e Classificação em Camadas de Nuvem (SaaS, PaaS e IaaS).
+
 Este repositório contém a implementação da atividade de Cloud, com Frontend em React (Vite) e Backend em Node.js (Express) com MariaDB, integrados à API da TMDB.
 
 ## Funcionalidades
@@ -18,6 +21,7 @@ Este repositório contém a implementação da atividade de Cloud, com Frontend 
 - **NOVO (Atividade 5):** Observabilidade & Logs de Auditoria — Microsserviço próprio (`log-service`) com Redis Streams, padrão CloudEvents v1.0, ECS e NIST SP 800-92.
 - **NOVO (Atividade 6):** Perfil de usuário com upload de foto — o catálogo vira uma rede social. Foto guardada em Object Storage (MinIO), referência no MariaDB, controle de acesso garantindo que cada um só edita o próprio perfil.
 - **NOVO (Atividade 7):** Plano Premium com Stripe — Serviço baseado em pagamento (modo de teste), Checkout Session hospedado, Webhook assíncrono com assinatura criptográfica HMAC-SHA256, conformidade PCI-DSS (zero dados de cartão salvos) e benefício comprovável (favoritos ilimitados e selo ⭐ Premium).
+- **NOVO (Atividade 8):** Encerramento do Projeto — Classificação SaaS/PaaS/IaaS da pilha e Documentação Reversa integral do sistema em [DOCUMENTACAO.md](DOCUMENTACAO.md).
 - **NOVO (Atividade Extra):** Documentação interativa das APIs com Swagger UI e especificação OpenAPI 3.0 para os microsserviços.
 - **NOVO (Atividade Extra):** Observabilidade & Métricas com Prometheus e Healthchecks (Liveness & Readiness) com detecção de falha no Docker Compose.
 - **NOVO (Atividade Extra):** Pipeline de CI/CD com GitHub Actions, Testes Automatizados, Publicação no GHCR (com tags de commit) e Deploy Contínuo com Watchtower/Portainer.
@@ -995,6 +999,45 @@ Usuário Premium autenticado exibindo o selo dourado **⭐ PREMIUM**, favoritos 
 Usuário gratuito atingindo o limite de 5 favoritos com mensagem explicativa e modal de upgrade com direcionamento direto para o Stripe:
 
 ![Limite do Plano Gratuito e Modal](./docs/print-limite-gratuito-403.png)
+
+---
+
+## Atividade 8 · Encerramento do Projeto: SaaS, PaaS, IaaS e Documentação Reversa
+
+> **Dossiê Completo de Engenharia Reversa:** [DOCUMENTACAO.md](DOCUMENTACAO.md)  
+> Professor da Disciplina: [github.com/siriani](https://github.com/siriani)
+
+Nesta atividade de encerramento, o foco é a compreensão holística do sistema desenvolvido ao longo do semestre através da **Engenharia Reversa** e do mapeamento da responsabilidade computacional nas três camadas de nuvem: **SaaS**, **PaaS** e **IaaS**.
+
+---
+
+### 1. Classificação SaaS, PaaS e IaaS do Projeto
+
+O sistema CineCloud utiliza simultaneamente as três camadas de nuvem. A tabela abaixo sintetiza onde cada peça vive e a sua respectiva justificativa:
+
+| Componente / Peça do Sistema | Camada de Nuvem | Justificativa Técnica |
+|---|:---:|---|
+| **Servidor Host / VM Linux** | **IaaS** | O provedor de infraestrutura (datacenter da faculdade ou host em nuvem) entrega apenas a máquina virtual com CPU, memória RAM, disco e conectividade de rede. Toda a instalação do sistema operacional Linux, kernel, runtime do Docker, configuração de firewall e particionamento de volumes é de nossa responsabilidade. |
+| **Docker Compose & Portainer Stack** | **PaaS** | Plataforma de execução conteinerizada que abstrai a gestão de servidores físicos e hipervisores. Nós entregamos apenas as imagens e o arquivo `docker-compose.yml`; a plataforma gerencia o ciclo de vida dos 7 containers, redes virtuais internas (`bridge`), políticas de reinicialização (`restart: always`), healthchecks e volumes persistentes. |
+| **GitHub Actions (Pipeline CI/CD)** | **PaaS** | Plataforma de automação gerenciada pelo GitHub. Não precisamos provisionar servidores de build; apenas declaramos o workflow (`.github/workflows/ci-cd.yml`) e a plataforma executa os runners, roda os testes automatizados, constrói as imagens Docker e dispara o deploy no Portainer. |
+| **GitHub Container Registry (GHCR)** | **PaaS** | Registro gerenciado de artefatos e imagens OCI (`ghcr.io/luisciaramicoli/...`). Nós apenas fazemos push e pull das imagens Docker compiladas, enquanto o GitHub gerencia alta disponibilidade, replicação geográfica e storage das camadas. |
+| **Stripe (Checkout & Pagamentos)** | **SaaS** | Produto de software pronto consumido via API REST. A Stripe gerencia 100% da conformidade bancária e de segurança (PCI-DSS), conectando-se a adquirentes e processando cartões de crédito. O CineCloud consome a API para criar sessões de checkout hospedadas e recebe confirmações via webhook, sem que nenhum dado de cartão passe pelos nossos servidores. |
+| **The Movie Database (TMDB API)** | **SaaS** | Software como serviço que fornece catálogo cinematográfico pronto. Consumimos os metadados dos filmes de Tom Hanks (sinopses, datas e pôsteres) via requisições HTTP REST prontas, sem precisar construir crawlers ou manter uma base de dados externa de entretenimento. |
+| **Mailtrap (Serviço SMTP Transacional)** | **SaaS** | Serviço pronto de correio eletrônico consumido via SMTP. O Mailtrap cuida de toda a pilha de entrega de e-mails (servidores MTA, regras anti-spam e caixas virtuais de auditoria), sendo utilizado para o envio dos links de recuperação de senha. |
+
+---
+
+### 2. Documentação Reversa Integral ([DOCUMENTACAO.md](DOCUMENTACAO.md))
+
+Toda a documentação reversa técnica do sistema foi estruturada no arquivo dedicado [DOCUMENTACAO.md](DOCUMENTACAO.md), dividido em quatro pilares:
+
+1. **Especificação Funcional:** Visão completa do produto sob a perspectiva do usuário final (cadastro/login, recuperação de senha com tokens de 30min, catálogo com resiliência fallback, favoritos, comentários sociais, perfil com foto no MinIO S3, assinatura Stripe e central de auditoria para administradores).
+2. **Arquitetura do Sistema ("Big Picture"):** Diagrama arquitetural completo em Mermaid ilustrando o fluxo entre o navegador, Gateway, microsserviço de autenticação, microsserviço de logs (Redis Streams), banco relacional MariaDB, Object Storage MinIO e os serviços SaaS externos (Stripe, TMDB, Mailtrap).
+3. **Regras de Negócio ("Se X, então Y"):** Extração exaustiva de mais de 40 regras impostas em tempo de execução pelo código (controle de acesso RBAC, trava de 5 favoritos no plano gratuito vs. favoritos ilimitados no plano premium, timing attacks com dummy hash, sanitização PII, rate limiting e políticas de segurança de rede).
+4. **Modelo de Dados:** Diagrama Entidade-Relacionamento (ERD) e dicionário de dados cobrindo as tabelas relacionais do MariaDB (`usuarios`, `reset_tokens`, `favoritos`, `comentarios`), a estrutura de eventos CloudEvents v1.0 / ECS na stream `audit_events` do Redis 7 e o bucket de fotos no MinIO.
+
+Para consultar a documentação completa com todos os diagramas e especificações técnicas, acesse:  
+👉 **[DOCUMENTACAO.md](DOCUMENTACAO.md)**
 
 ---
 
