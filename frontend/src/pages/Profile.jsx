@@ -1,77 +1,45 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Camera, CheckCircle2, AlertCircle, LogOut, Sparkles, Shield, User, FileText } from 'lucide-react';
 import api from '../services/api';
-import {
-  Film,
-  Star,
-  ShieldCheck,
-  LogOut,
-  ArrowLeft,
-  UserCircle,
-  Camera,
-  RefreshCw,
-  CheckCircle2,
-  AlertCircle,
-  Save,
-  Sparkles
-} from 'lucide-react';
 
-const BIO_MAX_LEN = 280;
+const MAX_BIO = 280;
 
 export default function Profile({ currentUser, onLogout }) {
   const [profile, setProfile] = useState(null);
-  const [movies, setMovies] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-  const [loading, setLoading] = useState(true);
-
   const [bio, setBio] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState({ type: '', message: '' });
   const [startingCheckout, setStartingCheckout] = useState(false);
-  const fileInputRef = useRef(null);
+  const [feedback, setFeedback] = useState({ type: '', message: '' });
 
-  const handleStartCheckout = async () => {
-    setStartingCheckout(true);
-    try {
-      const res = await api.post('checkout');
-      if (res.data?.url) {
-        window.location.href = res.data.url;
-      }
-    } catch (err) {
-      alert(err.response?.data?.error || 'Erro ao conectar ao Stripe.');
-      setStartingCheckout(false);
-    }
-  };
+  const fileInputRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchAll();
+    loadData();
   }, []);
 
-  const fetchAll = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const [profileRes, moviesRes, favoritesRes] = await Promise.all([
+      const [profileRes, postsRes] = await Promise.all([
         api.get('profile'),
-        api.get('movies'),
-        api.get('favorites')
+        api.get('posts')
       ]);
+
       setProfile(profileRes.data);
       setBio(profileRes.data.bio || '');
-      setMovies(moviesRes.data.cast || []);
-      setFavorites(favoritesRes.data || []);
+      setUserPosts(postsRes.data || []);
     } catch (err) {
       setFeedback({ type: 'error', message: err.response?.data?.error || 'Erro ao carregar perfil' });
     } finally {
       setLoading(false);
     }
   };
-
-  const favoriteMovies = useMemo(() => {
-    const favIds = new Set(favorites.map(f => f.tmdb_movie_id));
-    return movies.filter(m => favIds.has(m.id));
-  }, [movies, favorites]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -96,7 +64,7 @@ export default function Profile({ currentUser, onLogout }) {
       setPhotoFile(null);
       setPhotoPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      setFeedback({ type: 'success', message: 'Perfil atualizado com sucesso!' });
+      setFeedback({ type: 'success', message: 'Perfil atualizado com sucesso no MinIO!' });
       setTimeout(() => setFeedback({ type: '', message: '' }), 3000);
     } catch (err) {
       setFeedback({ type: 'error', message: err.response?.data?.error || 'Erro ao salvar perfil' });
@@ -105,195 +73,200 @@ export default function Profile({ currentUser, onLogout }) {
     }
   };
 
+  const handleStartCheckout = async () => {
+    setStartingCheckout(true);
+    setFeedback({ type: '', message: '' });
+    try {
+      const res = await api.post('checkout');
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        throw new Error('URL de checkout não retornada pelo Stripe');
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.error || 'Não foi possível iniciar o checkout no Stripe'
+      });
+      setStartingCheckout(false);
+    }
+  };
+
+  const avatarSrc = photoPreview || profile?.avatarUrl || null;
+  const initial = (currentUser?.nome || 'U').charAt(0).toUpperCase();
+  const isPremium = Boolean(profile?.premium);
+  const userRole = currentUser?.role || 'criador';
+
   if (loading) {
     return (
-      <div className="loading-grid-state" style={{ minHeight: '100vh' }}>
-        <RefreshCw size={28} className="spin-icon" />
+      <div className="catalog-loading">
+        <div className="spinner"></div>
         <p>Carregando perfil...</p>
       </div>
     );
   }
 
   return (
-    <div className="modern-app-wrapper">
-      <header className="modern-navbar">
-        <div className="navbar-container">
-          <div className="brand-user-row">
-            <div className="brand-section">
-              <div className="brand-logo-icon">
-                <Film size={20} />
-              </div>
-              <div className="brand-text-block">
-                <h1 className="brand-title">CineCloud</h1>
-                <span className="brand-subtitle">Meu Perfil</span>
-              </div>
-            </div>
-
-            <div className="user-identity-bar">
-              <div className="user-profile-chip">
-                <span className="user-name">{currentUser?.nome || 'Usuário'}</span>
-                {profile?.premium && (
-                  <span className="role-pill role-premium" title="Assinante do Plano Premium">
-                    <Sparkles size={12} />
-                    <span>Premium</span>
-                  </span>
-                )}
-                <span className={`role-pill ${currentUser?.can_manage_users ? 'role-admin' : 'role-user'}`}>
-                  {currentUser?.can_manage_users ? (
-                    <>
-                      <ShieldCheck size={12} />
-                      <span>Admin</span>
-                    </>
-                  ) : (
-                    <span>Usuário</span>
-                  )}
-                </span>
-              </div>
-              <button onClick={onLogout} className="btn-nav-logout" title="Encerrar Sessão">
-                <LogOut size={15} />
-                <span className="logout-text">Sair</span>
-              </button>
-            </div>
+    <div className="profile-page">
+      <header className="catalog-header">
+        <div className="header-left">
+          <Link to="/" className="btn-back">
+            <ArrowLeft size={18} />
+            <span>Voltar ao Painel</span>
+          </Link>
+          <div className="brand">
+            <span className="brand-title">PostCraft AI</span>
+            <span className="brand-subtitle">Meu Perfil & Identidade</span>
           </div>
+        </div>
 
-          <div className="nav-buttons-group">
-            <Link to="/" className="btn-nav-admin" title="Voltar ao catálogo">
-              <ArrowLeft size={14} />
-              <span>Catálogo</span>
-            </Link>
-          </div>
+        <div className="header-right">
+          <button className="btn-logout" onClick={onLogout}>
+            <LogOut size={16} />
+            <span>Sair</span>
+          </button>
         </div>
       </header>
 
-      <main className="main-content-container">
-        <div className="profile-layout">
+      <main className="profile-main">
+        <div className="profile-container">
           <section className="profile-card">
-            <div className="profile-avatar-block">
-              <div className="profile-avatar-circle">
-                {photoPreview || profile?.avatarUrl ? (
-                  <img src={photoPreview || profile.avatarUrl} alt="Foto de perfil" />
+            <div className="profile-avatar-wrapper">
+              <div className="profile-avatar-large">
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt={currentUser?.nome} />
                 ) : (
-                  <UserCircle size={64} />
+                  <span className="avatar-placeholder-text">{initial}</span>
+                )}
+                {isPremium && (
+                  <span className="badge-premium-avatar" title="Assinante Creator Pro">
+                    <Sparkles size={14} />
+                  </span>
                 )}
               </div>
               <button
                 type="button"
-                className="btn-avatar-upload"
+                className="btn-change-photo"
                 onClick={() => fileInputRef.current?.click()}
-                title="Escolher nova foto"
               >
                 <Camera size={14} />
-                <span>Trocar foto</span>
+                <span>Alterar Foto (MinIO)</span>
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={handleFileChange}
+                accept="image/png,image/jpeg,image/webp"
                 style={{ display: 'none' }}
+                onChange={handleFileChange}
               />
-              <span className="profile-avatar-hint">JPEG, PNG, WEBP ou GIF · até 3 MB</span>
             </div>
 
-            <form onSubmit={handleSave} className="profile-form">
-              <h2 className="profile-name-heading">{profile?.nome}</h2>
-              <p className="profile-email-sub">{profile?.email}</p>
-
-              <label htmlFor="bio" className="profile-field-label">Bio</label>
-              <textarea
-                id="bio"
-                value={bio}
-                onChange={e => setBio(e.target.value.slice(0, BIO_MAX_LEN))}
-                placeholder="Conte um pouco sobre você..."
-                rows={3}
-                className="profile-bio-textarea"
-              />
-              <span className="profile-bio-counter">{bio.length}/{BIO_MAX_LEN}</span>
+            <div className="profile-details">
+              <h2 className="profile-name">
+                {currentUser?.nome}
+                <span className={`badge-role-inline role-${userRole}`}>
+                  {userRole === 'admin' ? '🛡️ Admin' : (userRole === 'revisor' ? '👀 Revisor' : '🎨 Criador')}
+                </span>
+                {isPremium && (
+                  <span className="badge-premium-inline">
+                    <Sparkles size={12} />
+                    <span>Creator Pro</span>
+                  </span>
+                )}
+              </h2>
+              <p className="profile-email">{currentUser?.email}</p>
 
               {feedback.message && (
-                <div className={`feedback-banner ${feedback.type === 'error' ? 'banner-danger' : 'banner-success'}`}>
-                  {feedback.type === 'error' ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}
+                <div className={`profile-feedback ${feedback.type}`}>
+                  {feedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                   <span>{feedback.message}</span>
                 </div>
               )}
 
-              <button type="submit" disabled={saving} className="btn-save-profile">
-                {saving ? <RefreshCw size={15} className="spin-icon" /> : <Save size={15} />}
-                <span>{saving ? 'Salvando...' : 'Salvar alterações'}</span>
-              </button>
-            </form>
+              <form onSubmit={handleSave} className="profile-form">
+                <div className="form-group">
+                  <div className="label-row">
+                    <label htmlFor="bio">Bio / Descrição do Negócio</label>
+                    <span className="char-count">{bio.length}/{MAX_BIO}</span>
+                  </div>
+                  <textarea
+                    id="bio"
+                    rows={3}
+                    maxLength={MAX_BIO}
+                    placeholder="Conte sobre sua área de atuação ou proposta de valor..."
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                  />
+                </div>
 
-            {/* Box de Assinatura Stripe (Atividade 7) */}
-            <div className="profile-subscription-box">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', color: '#94a3b8' }}>
-                  Plano & Assinatura
-                </span>
-                {profile?.premium ? (
-                  <span className="role-pill role-premium">⭐ Premium</span>
-                ) : (
-                  <span className="role-pill role-user">Gratuito</span>
-                )}
+                <div className="form-actions">
+                  <button type="submit" className="btn-save" disabled={saving}>
+                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          {/* Seção Plano Creator Pro (Stripe) */}
+          <section className="profile-plan-section">
+            <h3 className="profile-section-title">
+              <Sparkles size={16} className="fill-gold" />
+              <span>Assinatura & Plano de Negócio</span>
+            </h3>
+
+            <div className={`plan-status-card ${isPremium ? 'plan-premium' : 'plan-free'}`}>
+              <div className="plan-status-header">
+                <div>
+                  <span className="plan-badge-label">{isPremium ? 'Plano Creator Pro' : 'Plano Gratuito'}</span>
+                  <h4>{isPremium ? '⭐ Assinatura Ativa (Gerações Ilimitadas)' : 'Plano de Entrada (3 posts/mês)'}</h4>
+                </div>
+                <span className="plan-price-tag">{isPremium ? 'R$ 49,90/mês' : 'R$ 0,00'}</span>
               </div>
 
-              {profile?.premium ? (
-                <div>
-                  <p style={{ fontSize: '0.88rem', color: '#34d399', margin: '0.25rem 0', fontWeight: 600 }}>
-                    ✓ Benefício Ativo: Favoritos Ilimitados
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0.25rem 0' }}>
-                    Cobrança gerenciada de forma segura pelo Stripe.
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <p style={{ fontSize: '0.85rem', color: '#e2e8f0', margin: '0.25rem 0' }}>
-                    Status: <strong>Plano Gratuito (limite de 5 favoritos)</strong>
-                  </p>
+              <p className="plan-description">
+                {isPremium
+                  ? 'Você possui acesso irrestrito: gerações ilimitadas de posts com IA, sem marcas d’água, exportação em alta definição e suporte dedicado.'
+                  : 'No plano gratuito você pode gerar até 3 posts com IA por mês com marca d’água discreta. Faça o upgrade para desbloquear todo o potencial do seu negócio.'}
+              </p>
+
+              {!isPremium && (
+                <div className="plan-upgrade-cta">
                   <button
                     type="button"
+                    className="btn-upgrade-stripe"
                     onClick={handleStartCheckout}
                     disabled={startingCheckout}
-                    className="btn-checkout-stripe"
-                    style={{ marginTop: '0.75rem', padding: '0.65rem 1rem', fontSize: '0.88rem' }}
                   >
                     <Sparkles size={15} />
-                    <span>{startingCheckout ? 'Conectando ao Stripe...' : 'Assinar Plano Premium (R$ 9,90/mês)'}</span>
+                    <span>{startingCheckout ? 'Conectando ao Stripe...' : 'Fazer Upgrade para Creator Pro (R$ 49,90/mês)'}</span>
                   </button>
                 </div>
               )}
             </div>
           </section>
 
+          {/* Seção Meus Posts Criados */}
           <section className="profile-favorites-section">
             <h3 className="profile-section-title">
-              <Star size={16} className="fill-gold" />
-              <span>Filmes favoritados</span>
-              <span className="tab-counter">{favoriteMovies.length}</span>
+              <FileText size={16} />
+              <span>Meus Posts & Carrosséis Cadastrados</span>
+              <span className="tab-counter">{userPosts.length}</span>
             </h3>
 
-            {favoriteMovies.length === 0 ? (
+            {userPosts.length === 0 ? (
               <div className="empty-catalog-state">
-                <Star size={40} />
-                <h3>Nenhum favorito ainda</h3>
-                <p>Volte ao catálogo e favorite alguns filmes para vê-los aqui.</p>
+                <FileText size={40} />
+                <h3>Nenhum post criado ainda</h3>
+                <p>Volte ao painel e crie seu primeiro post com IA para vê-lo aqui.</p>
               </div>
             ) : (
-              <div className="profile-favorites-grid">
-                {favoriteMovies.map(movie => (
-                  <div key={movie.id} className="favorite-mini-card">
-                    {movie.poster_path ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w200${movie.poster_path}`}
-                        alt={movie.title}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="poster-placeholder">
-                        <span>Sem Imagem</span>
-                      </div>
-                    )}
-                    <span className="favorite-mini-title" title={movie.title}>{movie.title}</span>
+              <div className="profile-posts-grid">
+                {userPosts.slice(0, 6).map(post => (
+                  <div key={post.id} className="post-mini-card">
+                    <span className="post-mini-niche">{post.nicho}</span>
+                    <span className="post-mini-title" title={post.titulo}>{post.titulo}</span>
+                    <span className="post-mini-status">{post.status}</span>
                   </div>
                 ))}
               </div>
