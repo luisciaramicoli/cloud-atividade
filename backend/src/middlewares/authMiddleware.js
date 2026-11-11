@@ -77,6 +77,62 @@ const requireAdminCentralized = async (req, res, next) => {
     }
 };
 
-module.exports = { authenticateToken, requireAdminCentralized, extractToken };
+// Centralized Enforcement: Exige papel 'criador' ou 'admin' (bloqueia 'revisor')
+const requireCreatorOrAdminCentralized = async (req, res, next) => {
+    // Verificação rápida no token se disponível
+    if (req.user && req.user.role === 'revisor') {
+        logFromReq(req, {
+            type: 'audit.security.access_denied',
+            action: 'tentativa_negada_403',
+            status: 'denied',
+            target: { type: 'route', method: req.method, path: req.originalUrl },
+            metadata: { reason: "Papel 'revisor' não pode criar ou modificar recursos", userRole: 'revisor', requiredRole: 'criador' },
+            immediate: true
+        });
+        return res.status(403).json({ error: "Acesso negado: o papel 'revisor' tem permissão apenas de leitura e não pode criar ou modificar posts." });
+    }
+
+    try {
+        const response = await internalClient.post(`${AUTH_SERVICE_URL}/authorize`, {
+            userId: req.userId,
+            requiredRole: 'criador',
+            action: req.originalUrl
+        });
+
+        if (response.data && response.data.allowed) {
+            return next();
+        }
+
+        logFromReq(req, {
+            type: 'audit.security.access_denied',
+            action: 'tentativa_negada_403',
+            status: 'denied',
+            target: { type: 'route', method: req.method, path: req.originalUrl },
+            metadata: { reason: "Permissão insuficiente para criar ou modificar recursos", requiredRole: 'criador' },
+            immediate: true
+        });
+
+        return res.status(403).json({ error: "Acesso negado: você não tem permissão para esta ação." });
+    } catch (error) {
+        if (error.response && error.response.status === 403) {
+            logFromReq(req, {
+                type: 'audit.security.access_denied',
+                action: 'tentativa_negada_403',
+                status: 'denied',
+                target: { type: 'route', method: req.method, path: req.originalUrl },
+                metadata: { reason: "Permissão insuficiente para criar ou modificar recursos", requiredRole: 'criador' },
+                immediate: true
+            });
+            return res.status(403).json({ error: "Acesso negado: o papel 'revisor' tem permissão apenas de leitura e não pode criar ou modificar posts." });
+        }
+        // Se serviço auth offline, fallback para o role do token
+        if (req.user && (req.user.role === 'criador' || req.user.role === 'admin')) {
+            return next();
+        }
+        return res.status(403).json({ error: "Acesso negado: permissão insuficiente." });
+    }
+};
+
+module.exports = { authenticateToken, requireAdminCentralized, requireCreatorOrAdminCentralized, extractToken };
 
 

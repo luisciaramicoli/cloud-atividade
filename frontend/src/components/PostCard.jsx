@@ -1,4 +1,5 @@
 import React from 'react';
+import { Sparkles, Eye, Edit3, Trash2, ArrowRight } from 'lucide-react';
 
 export default function PostCard({ post, onSelect, onEdit, onDelete, canEdit }) {
   const slides = Array.isArray(post.slides) ? post.slides : [];
@@ -6,11 +7,18 @@ export default function PostCard({ post, onSelect, onEdit, onDelete, canEdit }) 
 
   return (
     <div className="post-card">
-      <div className="post-card-preview" onClick={() => onSelect(post)}>
+      <div className="post-card-preview" onClick={() => onSelect(post)} style={post.imagem_url ? { backgroundImage: `linear-gradient(rgba(14, 10, 30, .65), rgba(14, 10, 30, .75)), url("${post.imagem_url}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
         <div className="preview-badge-row">
           <span className="badge-format">{post.formato || 'carrossel'}</span>
           <span className={`badge-status ${post.status === 'gerado' ? 'status-ai' : 'status-draft'}`}>
-            {post.status === 'gerado' ? '✨ Gerado com IA' : 'Rascunho'}
+            {post.status === 'gerado' ? (
+              <>
+                <Sparkles size={12} />
+                <span>Gerado com IA</span>
+              </>
+            ) : (
+              'Rascunho'
+            )}
           </span>
         </div>
 
@@ -24,7 +32,10 @@ export default function PostCard({ post, onSelect, onEdit, onDelete, canEdit }) 
 
         <div className="preview-footer">
           <span>{slides.length} slides</span>
-          <span className="preview-hint">Clique para abrir mockup 👉</span>
+          <span className="preview-hint">
+            <span>Abrir mockup</span>
+            <ArrowRight size={13} />
+          </span>
         </div>
       </div>
 
@@ -35,16 +46,19 @@ export default function PostCard({ post, onSelect, onEdit, onDelete, canEdit }) 
         </p>
 
         <div className="post-card-actions">
-          <button className="btn-view" onClick={() => onSelect(post)}>
-            Visualizar
+          <button type="button" className="btn-view" onClick={() => onSelect(post)}>
+            <Eye size={14} />
+            <span>Visualizar</span>
           </button>
           {canEdit && (
             <>
-              <button className="btn-edit" onClick={() => onEdit(post)}>
-                Editar
+              <button type="button" className="btn-edit" onClick={() => onEdit(post)}>
+                <Edit3 size={14} />
+                <span>Editar</span>
               </button>
-              <button className="btn-delete" onClick={() => onDelete(post.id)}>
-                Excluir
+              <button type="button" className="btn-delete" onClick={() => onDelete(post.id)}>
+                <Trash2 size={14} />
+                <span>Excluir</span>
               </button>
             </>
           )}
@@ -53,4 +67,3 @@ export default function PostCard({ post, onSelect, onEdit, onDelete, canEdit }) 
     </div>
   );
 }
-

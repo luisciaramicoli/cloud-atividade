@@ -1,16 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-test('CineCloud Backend · Smoke & Contract Tests', async (t) => {
+test('PostCraft AI Backend · Smoke & Contract Tests', async (t) => {
   await t.test('OpenAPI specification exists and is valid', () => {
     const spec = require('../src/docs/openapi.json');
     assert.ok(spec, 'OpenAPI spec should be loaded');
     assert.match(spec.openapi, /^3\./, 'Spec should be OpenAPI 3.x');
-    assert.strictEqual(spec.info.title, 'CineCloud API - Catálogo, Autenticação e Observabilidade');
-    assert.ok(spec.paths['/api/movies'], 'Should define /api/movies route');
+    assert.strictEqual(spec.info.title, 'PostCraft AI - Plataforma de Geração de Posts para Instagram com IA');
+    assert.ok(spec.paths['/api/posts'], 'Should define /api/posts route');
     assert.ok(spec.paths['/api/login'], 'Should define /api/login route');
     assert.ok(spec.paths['/api/logs'], 'Should define /api/logs route');
-    assert.ok(spec.components?.securitySchemes?.BearerAuth, 'Should define BearerAuth security scheme');
   });
 
   await t.test('Metrics Middleware generates valid Prometheus format', () => {

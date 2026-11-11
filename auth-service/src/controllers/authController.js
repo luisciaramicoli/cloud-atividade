@@ -26,7 +26,7 @@ function validatePassword(password) {
 }
 
 exports.register = async (req, res) => {
-    const { nome, email, password } = req.body;
+    const { nome, email, password, role: requestedRole } = req.body;
     if (!isStr(nome) || !isStr(email) || !isStr(password) || !nome.trim() || !email.trim() || !password) {
         return res.status(400).json({ error: 'Dados obrigatórios faltando' });
     }
@@ -36,12 +36,15 @@ exports.register = async (req, res) => {
     if (pwdError) return res.status(400).json({ error: pwdError });
     try {
         const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-        // A role nunca vem do corpo da requisição: todo cadastro público nasce como 'user'.
+        // Suporta os papéis do negócio: 'criador' (padrão) ou 'revisor'. 'admin' não pode ser escolhido publicamente.
+        const validRoles = ['criador', 'revisor'];
+        const role = (requestedRole && validRoles.includes(requestedRole)) ? requestedRole : 'criador';
+
         const [result] = await db.execute(
-            'INSERT INTO usuarios (nome, email, senha_hash) VALUES (?, ?, ?)',
-            [nome.trim(), email.trim().toLowerCase(), hashedPassword]
+            'INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?, ?, ?, ?)',
+            [nome.trim(), email.trim().toLowerCase(), hashedPassword, role]
         );
-        res.status(201).json({ message: 'Usuário criado', userId: result.insertId });
+        res.status(201).json({ message: 'Usuário criado com sucesso', userId: result.insertId, role });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Email já cadastrado' });
         res.status(500).json({ error: 'Erro interno' });
@@ -148,6 +151,14 @@ exports.authorize = async (req, res) => {
             return res.status(403).json({
                 allowed: false,
                 error: 'Permissão negada: ação restrita a administradores.',
+                user: { id: user.id, nome: user.nome, role: userRole, premium: isPremium }
+            });
+        }
+
+        if (requiredRole === 'criador' && userRole === 'revisor') {
+            return res.status(403).json({
+                allowed: false,
+                error: "Permissão negada: o papel 'revisor' possui permissão apenas de leitura e não pode criar ou modificar recursos.",
                 user: { id: user.id, nome: user.nome, role: userRole, premium: isPremium }
             });
         }

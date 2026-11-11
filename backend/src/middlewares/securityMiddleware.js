@@ -1,6 +1,6 @@
 const PRIVATE_IP = /^(::1|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|fc|fd|::ffff:(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.))/i;
 
-// CSP por rota: o frontend só precisa de si mesmo, fontes do Google e pôsteres do TMDB.
+// CSP por rota: o frontend precisa de si mesmo, fontes do Google e imagens de storage/placeholders.
 // O Swagger (/api-docs) carrega scripts do unpkg e usa script inline, então ganha uma política própria e mais larga.
 function securityHeaders(req, res, next) {
   res.removeHeader('X-Powered-By');
@@ -19,7 +19,7 @@ function securityHeaders(req, res, next) {
   const isDocs = req.path === '/api-docs' || req.path === '/apidocs';
   const csp = isDocs
     ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://unpkg.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
-    : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://image.tmdb.org; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
   res.setHeader('Content-Security-Policy', csp);
   next();
 }

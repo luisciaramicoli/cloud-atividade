@@ -27,8 +27,8 @@ export default function Profile({ currentUser, onLogout }) {
     setLoading(true);
     try {
       const [profileRes, postsRes] = await Promise.all([
-        api.get('profile'),
-        api.get('posts')
+        api.get('/profile'),
+        api.get('/posts')
       ]);
 
       setProfile(profileRes.data);
@@ -58,7 +58,7 @@ export default function Profile({ currentUser, onLogout }) {
       form.append('bio', bio);
       if (photoFile) form.append('foto', photoFile);
 
-      const res = await api.put(`users/${currentUser.id}/profile`, form);
+      const res = await api.put(`/users/${currentUser.id}/profile`, form);
 
       setProfile(prev => ({ ...prev, bio: res.data.profile.bio, avatarUrl: res.data.profile.avatarUrl }));
       setPhotoFile(null);
@@ -77,7 +77,7 @@ export default function Profile({ currentUser, onLogout }) {
     setStartingCheckout(true);
     setFeedback({ type: '', message: '' });
     try {
-      const res = await api.post('checkout');
+      const res = await api.post('/checkout');
       if (res.data?.url) {
         window.location.href = res.data.url;
       } else {

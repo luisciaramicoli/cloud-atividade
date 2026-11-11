@@ -9,8 +9,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_PASS=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-      - TMDB_API_KEY=${TMDB_API_KEY}
       - JWT_SECRET=${JWT_SECRET:?defina JWT_SECRET (minimo 16 caracteres)}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_TEXT_MODEL=${GEMINI_TEXT_MODEL:-gemini-2.5-flash}
+      - GEMINI_IMAGE_MODEL=${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
       - NODE_ENV=production
       - AUTH_SERVICE_URL=http://auth:3000
       - LOG_SERVICE_URL=http://log-service:3000
@@ -23,6 +25,7 @@ services:
       - MINIO_PORT=9000
       - MINIO_USE_SSL=false
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=avatars
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_ACCOUNT_ID=${STRIPE_ACCOUNT_ID:-}

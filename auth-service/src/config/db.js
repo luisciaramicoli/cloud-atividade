@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise');
+const bcrypt = require('bcrypt');
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
 
 const pool = mysql.createPool({
@@ -14,20 +15,23 @@ const pool = mysql.createPool({
 async function initDb() {
   try {
     const connection = await pool.getConnection();
-    console.log('Auth-Service: Conectado ao banco de dados MariaDB.');
+    console.log('PostCraft Auth-Service: Conectado ao banco de dados MariaDB.');
 
-    // Tabela usuarios alterada para suportar 'role'
+    // Tabela usuarios com suporte aos papéis do negócio: 'criador', 'revisor' e 'admin'
     await connection.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id INT AUTO_INCREMENT PRIMARY KEY,
         nome VARCHAR(100) NOT NULL,
         email VARCHAR(150) UNIQUE NOT NULL,
         senha_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'user',
+        role VARCHAR(50) DEFAULT 'criador',
         bio VARCHAR(280) DEFAULT NULL,
         avatar_key VARCHAR(255) DEFAULT NULL,
+        premium BOOLEAN DEFAULT FALSE,
+        stripe_customer_id VARCHAR(255) DEFAULT NULL,
+        stripe_subscription_id VARCHAR(255) DEFAULT NULL,
         criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
     // Tabela de tokens para reset de senha
@@ -39,54 +43,63 @@ async function initDb() {
         criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expira_em TIMESTAMP NOT NULL,
         usado BOOLEAN DEFAULT FALSE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-      )
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // Criar coluna 'role' silenciosamente em bancos legados
-    try {
-      await connection.query(`ALTER TABLE usuarios ADD COLUMN role VARCHAR(50) DEFAULT 'user'`);
-    } catch (e) {
-      // Ignora erro se a coluna já existir
+    // Garantir colunas necessárias se a tabela já existir de atividades anteriores
+    const columnsToAdd = [
+      { name: 'role', def: "VARCHAR(50) DEFAULT 'criador'" },
+      { name: 'bio', def: "VARCHAR(280) DEFAULT NULL" },
+      { name: 'avatar_key', def: "VARCHAR(255) DEFAULT NULL" },
+      { name: 'premium', def: "BOOLEAN DEFAULT FALSE" },
+      { name: 'stripe_customer_id', def: "VARCHAR(255) DEFAULT NULL" },
+      { name: 'stripe_subscription_id', def: "VARCHAR(255) DEFAULT NULL" }
+    ];
+
+    for (const col of columnsToAdd) {
+      try {
+        await connection.query(`ALTER TABLE usuarios ADD COLUMN ${col.name} ${col.def}`);
+      } catch (e) {
+        // Ignora se coluna já existir
+      }
     }
 
-    // Atividade 6: perfil social (bio + referência da foto no object storage) em bancos legados
-    try {
-      await connection.query(`ALTER TABLE usuarios ADD COLUMN bio VARCHAR(280) DEFAULT NULL`);
-    } catch (e) {
-      // Ignora erro se a coluna já existir
-    }
-    try {
-      await connection.query(`ALTER TABLE usuarios ADD COLUMN avatar_key VARCHAR(255) DEFAULT NULL`);
-    } catch (e) {
-      // Ignora erro se a coluna já existir
-    }
+    // Seed de contas de teste com os 3 papéis do negócio para facilidade de avaliação
+    const defaultPassword = 'Password123!';
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // Atividade 7: Plano Premium com Stripe (cobrança, webhook e benefício)
-    try {
-      await connection.query(`ALTER TABLE usuarios ADD COLUMN premium BOOLEAN DEFAULT FALSE`);
-    } catch (e) {
-      // Ignora erro se a coluna já existir
-    }
-    try {
-      await connection.query(`ALTER TABLE usuarios ADD COLUMN stripe_customer_id VARCHAR(255) DEFAULT NULL`);
-    } catch (e) {
-      // Ignora erro se a coluna já existir
-    }
-    try {
-      await connection.query(`ALTER TABLE usuarios ADD COLUMN stripe_subscription_id VARCHAR(255) DEFAULT NULL`);
-    } catch (e) {
-      // Ignora erro se a coluna já existir
+    const seedUsers = [
+      { nome: 'Administrador PostCraft', email: 'admin@postcraft.ai', role: 'admin', premium: 1 },
+      { nome: 'Dra. Camila Rocha (Criadora)', email: 'criador@postcraft.ai', role: 'criador', premium: 1 },
+      { nome: 'Lucas Revisor (Cliente)', email: 'revisor@postcraft.ai', role: 'revisor', premium: 0 }
+    ];
+
+    for (const u of seedUsers) {
+      try {
+        const [existing] = await connection.query('SELECT id FROM usuarios WHERE email = ?', [u.email]);
+        if (existing.length === 0) {
+          await connection.query(
+            'INSERT INTO usuarios (nome, email, senha_hash, role, premium) VALUES (?, ?, ?, ?, ?)',
+            [u.nome, u.email, passwordHash, u.role, u.premium]
+          );
+          console.log(`PostCraft Auth-Service: Usuário seed criado: ${u.email} (${u.role})`);
+        } else {
+          // Atualiza role se já existir
+          await connection.query('UPDATE usuarios SET role = ? WHERE email = ?', [u.role, u.email]);
+        }
+      } catch (err) {
+        console.warn(`Aviso ao criar usuário ${u.email}:`, err.message);
+      }
     }
 
     connection.release();
-    console.log('Auth-Service: Tabelas sincronizadas.');
+    console.log('PostCraft Auth-Service: Tabelas e papéis sincronizados.');
   } catch (error) {
-    console.error('Auth-Service: Erro ao conectar ou criar tabelas:', error.message);
+    console.error('PostCraft Auth-Service: Erro ao conectar ou inicializar tabelas:', error.message);
   }
 }
 
 initDb();
 
 module.exports = pool;
-

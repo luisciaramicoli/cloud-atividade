@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import {
+  Sparkles,
+  Search,
+  ShieldCheck,
+  Palette,
+  Eye,
+  Star,
+  Layers,
+  User,
+  LogOut,
+  FileText,
+  Info,
+  Lock,
+  FileQuestion,
+  Plus
+} from 'lucide-react';
 import api from '../services/api';
 import PostCard from '../components/PostCard';
 import PostPreviewModal from '../components/PostPreviewModal';
@@ -93,7 +109,9 @@ export default function Dashboard({ currentUser, onLogout }) {
       <header className="dashboard-header">
         <div className="dashboard-container header-row">
           <div className="brand-group">
-            <span className="brand-logo-icon">✨</span>
+            <div className="brand-logo-icon">
+              <Sparkles size={18} />
+            </div>
             <span className="brand-name">PostCraft<span className="brand-ai">AI</span></span>
           </div>
 
@@ -101,29 +119,41 @@ export default function Dashboard({ currentUser, onLogout }) {
             <div className="user-pill">
               <span className="user-name">{currentUser?.nome}</span>
               <span className={`role-badge role-${userRole}`}>
-                {userRole === 'admin' ? '🛡️ Admin' : (userRole === 'revisor' ? '👀 Revisor' : '🎨 Criador')}
+                {userRole === 'admin' ? (
+                  <><ShieldCheck size={12} /> Admin</>
+                ) : userRole === 'revisor' ? (
+                  <><Eye size={12} /> Revisor</>
+                ) : (
+                  <><Palette size={12} /> Criador</>
+                )}
               </span>
               {currentUser?.premium && (
-                <span className="pro-badge">⭐ Pro</span>
+                <span className="pro-badge">
+                  <Star size={11} className="fill-amber-300" /> Pro
+                </span>
               )}
             </div>
 
             {isAdmin && (
-              <button className="btn-header-secondary" onClick={handleOpenLogs}>
-                📊 Trilha de Auditoria (Redis)
+              <button type="button" className="btn-header-secondary" onClick={handleOpenLogs}>
+                <FileText size={14} />
+                <span>Auditoria</span>
               </button>
             )}
 
-            <button className="btn-header-secondary" onClick={() => setBrandModalOpen(true)}>
-              🏢 Minhas Marcas (MinIO)
+            <button type="button" className="btn-header-secondary" onClick={() => setBrandModalOpen(true)}>
+              <Layers size={14} />
+              <span>Minhas Marcas</span>
             </button>
 
             <Link to="/profile" className="btn-header-secondary">
-              👤 Meu Perfil
+              <User size={14} />
+              <span>Meu Perfil</span>
             </Link>
 
-            <button className="btn-header-logout" onClick={onLogout}>
-              Sair
+            <button type="button" className="btn-header-logout" onClick={onLogout} title="Encerrar sessão">
+              <LogOut size={14} />
+              <span>Sair</span>
             </button>
           </div>
         </div>
@@ -132,8 +162,9 @@ export default function Dashboard({ currentUser, onLogout }) {
       {/* Banner de Aviso de Papel (quando Revisor) */}
       {isReviewer && (
         <div className="reviewer-banner">
-          <div className="dashboard-container">
-            <span>ℹ️ <strong>Modo Revisor Ativo:</strong> Seu papel permite visualizar e auditar todos os posts e carrosséis. A criação, edição e exclusão de posts estão restritas aos usuários com papel <strong>Criador</strong> (tentativas via API retornarão 403 Forbidden).</span>
+          <div className="dashboard-container reviewer-banner-content">
+            <Info size={16} className="reviewer-banner-icon" />
+            <span><strong>Modo Revisor Ativo:</strong> Seu papel permite visualizar e auditar todos os posts e carrosséis. A criação, edição e exclusão de posts estão restritas aos usuários com papel <strong>Criador</strong> (tentativas via API retornarão 403 Forbidden).</span>
           </div>
         </div>
       )}
@@ -149,12 +180,14 @@ export default function Dashboard({ currentUser, onLogout }) {
 
           <div className="toolbar-right">
             {canEdit ? (
-              <button className="btn-primary-glow" onClick={() => setCreateModalOpen(true)}>
-                ✨ Novo Post com IA
+              <button type="button" className="btn-primary-glow" onClick={() => setCreateModalOpen(true)}>
+                <Sparkles size={16} />
+                <span>Novo Post com IA</span>
               </button>
             ) : (
-              <button className="btn-primary-disabled" disabled title="Papel revisor possui permissão apenas de leitura">
-                🔒 Criação restrita a Criadores (403)
+              <button type="button" className="btn-primary-disabled" disabled title="Papel revisor possui permissão apenas de leitura">
+                <Lock size={15} />
+                <span>Criação restrita a Criadores (403)</span>
               </button>
             )}
           </div>
@@ -163,7 +196,7 @@ export default function Dashboard({ currentUser, onLogout }) {
         {/* Linha de Busca e Filtro por Nicho */}
         <div className="filter-row">
           <div className="search-box">
-            <span>🔍</span>
+            <Search size={16} className="search-icon" />
             <input
               type="text"
               placeholder="Buscar por tema ou conteúdo..."
@@ -176,6 +209,7 @@ export default function Dashboard({ currentUser, onLogout }) {
             {['todos', 'Nutrição & Saúde', 'Direito & Advocacia', 'Fitness & Personal', 'Psicologia & Terapia'].map(nicho => (
               <button
                 key={nicho}
+                type="button"
                 className={`niche-pill ${selectedNiche === nicho ? 'active' : ''}`}
                 onClick={() => setSelectedNiche(nicho)}
               >
@@ -194,16 +228,24 @@ export default function Dashboard({ currentUser, onLogout }) {
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="empty-state">
-            <span className="empty-icon">📱</span>
+            <div className="empty-icon-wrap">
+              <FileQuestion size={40} />
+            </div>
             <h3>Nenhum post encontrado</h3>
             <p>
               {isCreator
-                ? 'Clique no botão acima para gerar seu primeiro carrossel com Inteligência Artificial!'
+                ? 'Clique no botão abaixo para gerar seu primeiro carrossel com Inteligência Artificial!'
                 : 'Não há posts disponíveis para revisão neste momento.'}
             </p>
             {canEdit && (
-              <button className="btn-primary" style={{ marginTop: '16px' }} onClick={() => setCreateModalOpen(true)}>
-                ✨ Criar Meu Primeiro Post
+              <button
+                type="button"
+                className="btn-primary-glow"
+                style={{ marginTop: '16px' }}
+                onClick={() => setCreateModalOpen(true)}
+              >
+                <Sparkles size={16} />
+                <span>Criar Meu Primeiro Post</span>
               </button>
             )}
           </div>
@@ -264,7 +306,7 @@ export default function Dashboard({ currentUser, onLogout }) {
           <div className="modal-container modal-logs" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2>📊 Trilha de Auditoria em Tempo Real (Redis Streams)</h2>
+                <h2>Trilha de Auditoria em Tempo Real (Redis Streams)</h2>
                 <p className="modal-subtitle">Eventos de negócio capturados com conformidade NIST SP 800-92 e CloudEvents v1.0</p>
               </div>
               <button className="modal-close-btn" onClick={() => setLogsModalOpen(false)}>&times;</button>
@@ -314,4 +356,3 @@ export default function Dashboard({ currentUser, onLogout }) {
     </div>
   );
 }
-

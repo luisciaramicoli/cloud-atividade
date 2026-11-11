@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CineCloud - Arquitetura de Nuvem e Microsserviços</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0f19;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #f8fafc;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    p {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .diagram-container {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 20px 40px -15px rgba(0,0,0,0.5);
+      max-width: 1400px;
+      width: 100%;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="badge">Cloud Engineering · SaaS / PaaS / IaaS</div>
+    <h1>CineCloud — Arquitetura de Microsserviços Distribuída</h1>
+    <p>Docker Compose · Redis Streams (CloudEvents) · MinIO S3 · Stripe · Prometheus & Grafana</p>
+  </div>
+
+  <div class="diagram-container">
+    <pre class="mermaid">
+flowchart TD
+    subgraph Clients ["Clientes & Provedores Externos"]
+        Browser["Navegador Web (SPA React 18 + Vite)"]
+        StripeWebhook["Stripe Servers (Webhooks HTTP)"]
+    end
+
+    subgraph HostGateway ["Host · Porta Pública 8218"]
+        AppGateway["API Gateway & Catálogo (app:3000)
+        - Proxy Reverso SPA
+        - Proxy Reverso /grafana
+        - Streaming /storage/avatarshttps://lapps.studio/disciplinas/introducao-computacao-nuvem/atividades/saas-paas-iaas/
+        
+        - Webhook Ingestion"]
+    end
+
+    subgraph InternalNetwork ["Rede Interna Docker (Bridge Privada)"]
+        direction TB
+
+        subgraph CoreServices ["Microsserviços de Negócio"]
+            AuthService["auth-service:3000
+            - RBAC Centralizado
+            - Hash bcrypt & JWT
+            - Reset de Senha (SMTP)"]
+
+            LogService["log-service:3000
+            - Ingestão CloudEvents v1.0
+            - Leitura XREVRANGE"]
+        end
+
+        subgraph DataStores ["Camada de Dados & Filas"]
+            MariaDB[("MariaDB 10.x / MySQL
+            - usuarios, reset_tokens
+            - favoritos, comentarios")]
+
+            RedisServer[("Redis 7 (AOF Persistente)
+            - Stream: audit_events
+            - MAXLEN ~ 50000")]
+
+            MinIOStore[("MinIO Object Storage (S3)
+            - Bucket avatars
+            - Chaves seguras hex")]
+        end
+
+        subgraph Observability ["Observabilidade & IaC"]
+            Prometheus["Prometheus:9090
+            - Scraping /metrics"]
+
+            Grafana["Grafana:3000
+            - Dashboards CineCloud
+            - RBAC Admin via Gateway"]
+        end
+    end
+
+    subgraph ExternalSaaS ["Provedores SaaS em Nuvem"]
+        TMDB["The Movie Database (TMDB API)"]
+        StripeAPI["Stripe Payments (Checkout R$ 9,90/mês)"]
+        Mailtrap["Mailtrap SMTP (E-mails Transacionais)"]
+    end
+
+    %% Conexões externas
+    Browser -->|HTTP 8218 / Cookie HttpOnly| AppGateway
+    StripeWebhook -->|POST /api/webhook HMAC-SHA256| AppGateway
+
+    %% Comunicação Gateway -> Internos
+    AppGateway -->|Enforcement Centralizado POST /authorize
+    Header x-internal-token| AuthService
+    AppGateway -->|Ingestão Assíncrona POST /logs/batch
+    Header x-internal-token| LogService
+    AppGateway -->|Consultas Catálogo / Favoritos / Comentários| MariaDB
+    AppGateway -->|Streaming e Upload S3| MinIOStore
+    AppGateway -->|Proxy Reverso Interno| Grafana
+
+    %% Microsserviços para bancos
+    AuthService -->|Validação Usuários & Tokens| MariaDB
+    AuthService -->|E-mails de Recuperação| Mailtrap
+    LogService -->|XADD / XREVRANGE| RedisServer
+
+    %% Chamadas externas do Gateway
+    AppGateway -->|Metadados de Filmes| TMDB
+    AppGateway -->|Criação de Sessões de Checkout| StripeAPI
+
+    %% Métricas
+    Prometheus -->|Scrape /metrics| AppGateway
+    Prometheus -->|Scrape /metrics| AuthService
+    Prometheus -->|Scrape /metrics| LogService
+    Grafana -->|Consultas PromQL| Prometheus
+    </pre>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#111827',
+        primaryColor: '#1e293b',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#3b82f6',
+        lineColor: '#60a5fa',
+        secondaryColor: '#0f172a',
+        tertiaryColor: '#1e1b4b'
+      }
+    });
+  </script>
+</body>
+</html>
