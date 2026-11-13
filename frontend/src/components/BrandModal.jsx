@@ -48,7 +48,7 @@ export default function BrandModal({ onClose, brands = [], onBrandCreated }) {
 
     try {
       const formData = new FormData();
-      formData.append('avatar', file); // Usa o campo de upload processado pelo multer
+      formData.append('foto', file); // Usa o campo de upload processado pelo multer
 
       await api.post(`/brands/${selectedBrandId}/logo`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

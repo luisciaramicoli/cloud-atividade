@@ -5685,3 +5685,45 @@ button:hover {
   .modal-create-post .btn-create-cancel, .modal-create-post .btn-create-submit { width: 100%; }
   .modal-create-post > .auth-alert { margin: 16px 18px 0 !important; }
 }
+
+/* Shared usability rules for all PostCraft screens. */
+button, input, select, textarea { font-family: inherit; }
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 3px;
+}
+button:disabled { cursor: not-allowed; opacity: .6; }
+.dashboard-container, .profile-details, .toolbar-left, .toolbar-right { min-width: 0; }
+.profile-email, .profile-name, .user-name, .preview-title { overflow-wrap: anywhere; }
+.modal-brand .brand-section { display: block; }
+.modal-brand .form-group, .modal-edit fieldset { min-width: 0; }
+.modal-edit { background: #111a2c; color: #f1f5f9; }
+.modal-edit label { display: block; margin: 12px 0; }
+.modal-edit textarea { display: block; width: 100%; padding: 12px; margin-top: 8px; background: #0c1423; color: #f1f5f9; border: 1px solid #344258; border-radius: 8px; resize: vertical; }
+.modal-edit fieldset { border: 1px solid #344258; border-radius: 8px; margin: 16px 0; }
+.logs-table-wrap { max-width: 100%; overflow-x: auto; }
+@media (max-width: 1024px) {
+  .header-row, .header-user-info { flex-wrap: wrap; gap: 12px; }
+}
+@media (max-width: 560px) {
+  .profile-card { grid-template-columns: minmax(0, 1fr); }
+  .profile-page .header-left, .profile-name { flex-wrap: wrap; }
+  .modal-container { max-width: 100%; }
+  .modal-container.modal-create-post, .modal-container.modal-preview { padding: 0 !important; }
+  .search-box { min-width: 0; max-width: 100%; }
+  input, select, textarea { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+.profile-page { width: 100%; flex: 1; }
+.profile-page .profile-favorites-section { background: #111827; border-color: #1f2937; }
+.profile-page .header-left { min-width: 0; }
+@media (max-width: 560px) {
+  .profile-page .catalog-header .header-left { flex-wrap: wrap; gap: 12px; }
+  .profile-page .brand { min-width: 0; }
+}
+@media (max-width: 560px) {
+  .profile-page .catalog-header .header-left { display: grid; grid-template-columns: minmax(0, 1fr); }
+}

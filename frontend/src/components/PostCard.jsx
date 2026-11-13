@@ -7,7 +7,7 @@ export default function PostCard({ post, onSelect, onEdit, onDelete, canEdit }) 
 
   return (
     <div className="post-card">
-      <div className="post-card-preview" onClick={() => onSelect(post)} style={post.imagem_url ? { backgroundImage: `linear-gradient(rgba(14, 10, 30, .65), rgba(14, 10, 30, .75)), url("${post.imagem_url}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+      <div className="post-card-preview" role="button" tabIndex={0} aria-label={`Visualizar ${post.titulo}`} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(post); } }} onClick={() => onSelect(post)} style={post.imagem_url ? { backgroundImage: `linear-gradient(rgba(14, 10, 30, .65), rgba(14, 10, 30, .75)), url("${post.imagem_url}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
         <div className="preview-badge-row">
           <span className="badge-format">{post.formato || 'carrossel'}</span>
           <span className={`badge-status ${post.status === 'gerado' ? 'status-ai' : 'status-draft'}`}>

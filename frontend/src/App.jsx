@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import api from './services/api';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
@@ -78,6 +78,7 @@ function App() {
           )
         }
       />
+      <Route path="*" element={<Navigate to="/" replace />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>

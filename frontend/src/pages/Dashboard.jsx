@@ -20,6 +20,7 @@ import api from '../services/api';
 import PostCard from '../components/PostCard';
 import PostPreviewModal from '../components/PostPreviewModal';
 import PostCreateModal from '../components/PostCreateModal';
+import PostEditModal from '../components/PostEditModal';
 import BrandModal from '../components/BrandModal';
 
 export default function Dashboard({ currentUser, onLogout }) {
@@ -31,6 +32,7 @@ export default function Dashboard({ currentUser, onLogout }) {
   const [error, setError] = useState('');
 
   // Modais
+  const [editingPost, setEditingPost] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [brandModalOpen, setBrandModalOpen] = useState(false);
@@ -199,6 +201,7 @@ export default function Dashboard({ currentUser, onLogout }) {
             <Search size={16} className="search-icon" />
             <input
               type="text"
+              aria-label="Buscar posts"
               placeholder="Buscar por tema ou conteúdo..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -210,6 +213,7 @@ export default function Dashboard({ currentUser, onLogout }) {
               <button
                 key={nicho}
                 type="button"
+                aria-pressed={selectedNiche === nicho}
                 className={`niche-pill ${selectedNiche === nicho ? 'active' : ''}`}
                 onClick={() => setSelectedNiche(nicho)}
               >
@@ -219,14 +223,14 @@ export default function Dashboard({ currentUser, onLogout }) {
           </div>
         </div>
 
-        {error && <div className="alert-error">{error}</div>}
+        {error && <div className="alert-error" role="alert">{error} <button onClick={loadPosts}>Tentar novamente</button></div>}
 
         {/* Grid de Posts */}
         {loading ? (
           <div className="loading-state">
             <p>Carregando seus posts...</p>
           </div>
-        ) : filteredPosts.length === 0 ? (
+        ) : error ? null : filteredPosts.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon-wrap">
               <FileQuestion size={40} />
@@ -257,7 +261,7 @@ export default function Dashboard({ currentUser, onLogout }) {
                 post={post}
                 canEdit={canEdit}
                 onSelect={(p) => setSelectedPost(p)}
-                onEdit={(p) => setSelectedPost(p)}
+                onEdit={setEditingPost}
                 onDelete={handleDeletePost}
               />
             ))}
@@ -271,9 +275,11 @@ export default function Dashboard({ currentUser, onLogout }) {
           post={selectedPost}
           canEdit={canEdit}
           onClose={() => setSelectedPost(null)}
-          onEdit={() => {}}
+          onEdit={setEditingPost}
         />
       )}
+
+      {editingPost && <PostEditModal post={editingPost} onClose={() => setEditingPost(null)} onSaved={() => { setEditingPost(null); loadPosts(); }} />}
 
       {/* Modal de Criação de Post */}
       {createModalOpen && (

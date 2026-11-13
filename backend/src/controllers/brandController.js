@@ -1,6 +1,6 @@
 const db = require('../config/db');
 const { logFromReq } = require('../services/loggerService');
-const { uploadBuffer } = require('../services/storageService');
+const { uploadAvatar } = require('../services/storageService');
 
 const toPositiveInt = (v) => {
   const n = typeof v === 'number' ? v : (typeof v === 'string' && /^\d{1,10}$/.test(v) ? Number(v) : NaN);
@@ -84,10 +84,9 @@ exports.uploadLogo = async (req, res) => {
       return res.status(403).json({ error: 'Acesso negado: você não pode alterar a marca de outro usuário.' });
     }
 
-    const objectKey = `logos/${req.userId}/${Date.now()}-${req.file.originalname}`;
-    await uploadBuffer(objectKey, req.file.buffer, req.file.mimetype);
+    const objectKey = await uploadAvatar(req.userId, req.file.buffer, req.file.mimetype);
 
-    const logoUrl = `/storage/${objectKey}`;
+    const logoUrl = `/storage/avatars/${objectKey}`;
     await db.execute('UPDATE marcas SET logo_url = ? WHERE id = ?', [logoUrl, id]);
 
     logFromReq(req, {

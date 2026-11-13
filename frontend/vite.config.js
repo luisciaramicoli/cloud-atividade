@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/storage': { target: 'http://localhost:8218', changeOrigin: false },
       '/api': {
         target: 'http://localhost:8218',
         changeOrigin: false

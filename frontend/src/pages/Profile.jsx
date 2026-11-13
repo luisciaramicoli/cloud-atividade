@@ -41,6 +41,8 @@ export default function Profile({ currentUser, onLogout }) {
     }
   };
 
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -50,7 +52,8 @@ export default function Profile({ currentUser, onLogout }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!currentUser?.id) return;
+    const userId = profile?.id || currentUser?.id;
+    if (!userId) { setFeedback({ type: 'error', message: 'Recarregue o perfil para salvar suas alterações.' }); return; }
     setSaving(true);
     setFeedback({ type: '', message: '' });
     try {
@@ -58,13 +61,13 @@ export default function Profile({ currentUser, onLogout }) {
       form.append('bio', bio);
       if (photoFile) form.append('foto', photoFile);
 
-      const res = await api.put(`/users/${currentUser.id}/profile`, form);
+      const res = await api.put(`/users/${userId}/profile`, form);
 
       setProfile(prev => ({ ...prev, bio: res.data.profile.bio, avatarUrl: res.data.profile.avatarUrl }));
       setPhotoFile(null);
       setPhotoPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      setFeedback({ type: 'success', message: 'Perfil atualizado com sucesso no MinIO!' });
+      setFeedback({ type: 'success', message: 'Perfil atualizado com sucesso!' });
       setTimeout(() => setFeedback({ type: '', message: '' }), 3000);
     } catch (err) {
       setFeedback({ type: 'error', message: err.response?.data?.error || 'Erro ao salvar perfil' });
@@ -150,7 +153,7 @@ export default function Profile({ currentUser, onLogout }) {
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Camera size={14} />
-                <span>Alterar Foto (MinIO)</span>
+                <span>Alterar foto</span>
               </button>
               <input
                 ref={fileInputRef}
